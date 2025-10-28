@@ -243,6 +243,28 @@ class Graph:
 
         return {"nodes": nodes, "edges": edges}
 
+    # --------- Pickle I/O ---------
+    def save_pickle(self, path: str) -> None:
+        """Serialize the graph to a pickle file at `path`.
+
+        Uses Python's pickle; objects must be pickleable (Node IDs included).
+        """
+        import pickle
+
+        with open(path, "wb") as f:
+            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+
+    @classmethod
+    def load_pickle(cls, path: str) -> "Graph":
+        """Load a graph instance from a pickle file at `path`."""
+        import pickle
+
+        with open(path, "rb") as f:
+            obj = pickle.load(f)
+        if not isinstance(obj, cls):
+            raise TypeError(f"Pickle at {path!r} does not contain a {cls.__name__}")
+        return obj
+
     @classmethod
     def from_edges(
         cls,
@@ -291,4 +313,3 @@ class Graph:
 
     def __repr__(self) -> str:
         return f"Graph(nodes={len(self._nodes)}, edges={self.number_of_edges()})"
-
