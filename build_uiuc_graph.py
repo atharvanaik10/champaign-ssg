@@ -15,7 +15,7 @@ python build_uiuc_graph.py
 from graph import Graph
 
 
-def build_hardcoded_uiuc_campus() -> Graph:
+def build_grid_part() -> Graph:
     """Create a simple hardcoded UIUC campus intersection graph.
 
     Intersections are labeled as "<Street_EW> & <Street_NS>". Streets chosen
@@ -29,8 +29,10 @@ def build_hardcoded_uiuc_campus() -> Graph:
 
     g = Graph()
 
-    streets_ew = ["Springfield Ave", "Green St", "Armory Ave", "Gregory Dr"]
-    streets_ns = ["Wright St", "Goodwin Ave", "Mathews Ave", "Lincoln Ave"]
+    streets_ns = ["University Ave", "Clark St", "Main St", "White St", 
+                  "Stoughton St", "Springfield Ave", "Healey St", "Green St", 
+                  "John St", "Daniel St", "Chalmers St", "Armory Ave"]
+    streets_ew = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", "Wright St"]
 
     # Create nodes for each intersection with risk_factor=1.0 (no coverage used)
     nodes = [f"{ew} & {ns}" for ew in streets_ew for ns in streets_ns]
@@ -60,7 +62,7 @@ def build_hardcoded_uiuc_campus() -> Graph:
 
 def main() -> None:
     outfile = "uiuc_campus_graph.pkl"
-    g = build_hardcoded_uiuc_campus()
+    g = build_grid_part()
     g.verify_undirected_invariants()
     g.save_pickle(outfile)
     print(f"Saved graph with {g.number_of_nodes()} nodes and {g.number_of_edges()} edges to {outfile}")
