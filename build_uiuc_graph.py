@@ -29,10 +29,10 @@ def build_grid_part() -> Graph:
 
     g = Graph()
 
-    streets_ns = ["University Ave", "Clark St", "Main St", "White St", 
+    streets_ew = ["University Ave", "Clark St", "Main St", "White St", 
                   "Stoughton St", "Springfield Ave", "Healey St", "Green St", 
                   "John St", "Daniel St", "Chalmers St", "Armory Ave"]
-    streets_ew = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", "Wright St"]
+    streets_ns = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", "Wright St"]
 
     # Create nodes for each intersection with risk_factor=1.0 (no coverage used)
     nodes = [f"{ew} & {ns}" for ew in streets_ew for ns in streets_ns]
