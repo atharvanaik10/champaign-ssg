@@ -1,9 +1,11 @@
 """
 Lightweight undirected weighted graph for security games.
 
-Each node stores two attributes:
+Each node is represented as a Node object with:
+- id: node identifier (hashable)
 - risk_factor: float
-- coverage: float
+- lat: Optional[float]
+- lon: Optional[float]
 
 Edges are undirected and carry a numeric weight (default 1.0).
 
@@ -15,8 +17,8 @@ Design goals:
 Example
 -------
 >>> g = Graph()
->>> g.add_node("A", risk_factor=0.8, coverage=0.2)
->>> g.add_node("B", risk_factor=0.5, coverage=0.6)
+>>> g.add_node("A", risk_factor=0.8, lat=40.11, lon=-88.23)
+>>> g.add_node("B", risk_factor=0.5)
 >>> g.add_edge("A", "B", weight=2.0)
 >>> g.get_edge_weight("A", "B")
 2.0
@@ -26,26 +28,30 @@ Example
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, Hashable, Iterable, Iterator, List, Mapping, Optional, Tuple
+from typing import Dict, Hashable, Iterable, Iterator, List, Optional, Tuple
 
 
 NodeId = Hashable
 
 
-@dataclass
-class NodeAttrs:
-    """Attributes attached to a graph node.
+class Node:
+    """A node in the graph with id, risk, and optional coordinates."""
 
-    - risk_factor: numeric risk associated with the node (float).
-    - coverage: security coverage level at the node (float).
-    """
+    def __init__(
+        self,
+        node_id: Hashable,
+        *,
+        risk_factor: float = 0.0,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
+    ) -> None:
+        self.id: Hashable = node_id
+        self.risk_factor: float = float(risk_factor)
+        self.lat: Optional[float] = None if lat is None else float(lat)
+        self.lon: Optional[float] = None if lon is None else float(lon)
 
-    risk_factor: float = 0.0
-    coverage: float = 0.0
-
-    def as_dict(self) -> Dict[str, float]:
-        return {"risk_factor": self.risk_factor, "coverage": self.coverage}
+    def as_dict(self) -> Dict[str, object]:
+        return {"id": self.id, "risk_factor": self.risk_factor, "lat": self.lat, "lon": self.lon}
 
 
 class Graph:
@@ -58,7 +64,7 @@ class Graph:
     """
 
     def __init__(self) -> None:
-        self._nodes: Dict[NodeId, NodeAttrs] = {}
+        self._nodes: Dict[NodeId, Node] = {}
         self._adj: Dict[NodeId, Dict[NodeId, float]] = {}
 
     # --------- Node API ---------
@@ -67,7 +73,8 @@ class Graph:
         node: NodeId,
         *,
         risk_factor: float = 0.0,
-        coverage: float = 0.0,
+        lat: Optional[float] = None,
+        lon: Optional[float] = None,
         overwrite: bool = False,
     ) -> None:
         """Add a node with attributes.
@@ -79,28 +86,39 @@ class Graph:
         if node in self._nodes and not overwrite:
             return
 
-        self._nodes[node] = NodeAttrs(float(risk_factor), float(coverage))
+        self._nodes[node] = Node(node, risk_factor=float(risk_factor), lat=lat, lon=lon)
         self._adj.setdefault(node, {})
 
     def add_nodes_from(
         self,
-        nodes: Iterable[Tuple[NodeId, float, float]] | Iterable[NodeId],
+        nodes: Iterable[Tuple[NodeId, float, Optional[float], Optional[float]]] | Iterable[NodeId] | Iterable[Tuple[NodeId, float]] | Iterable[Tuple[NodeId, float, Optional[float]]],
         *,
         default_risk: float = 0.0,
-        default_coverage: float = 0.0,
+        default_lat: Optional[float] = None,
+        default_lon: Optional[float] = None,
         overwrite: bool = False,
     ) -> None:
         """Add many nodes.
 
-        Accepts either an iterable of node IDs, or of triples (node, risk, coverage).
+        Accepts either an iterable of node IDs, pairs (node, risk), triples (node, risk, lat),
+        or quadruples (node, risk, lat, lon).
         """
 
         for item in nodes:
-            if isinstance(item, tuple) and len(item) == 3:
-                n, r, c = item  # type: ignore[misc]
-                self.add_node(n, risk_factor=float(r), coverage=float(c), overwrite=overwrite)
+            if isinstance(item, tuple):
+                if len(item) == 2:
+                    n, r = item  # type: ignore[misc]
+                    self.add_node(n, risk_factor=float(r), lat=default_lat, lon=default_lon, overwrite=overwrite)
+                elif len(item) == 3:
+                    n, r, lat = item  # type: ignore[misc]
+                    self.add_node(n, risk_factor=float(r), lat=lat, lon=default_lon, overwrite=overwrite)
+                elif len(item) == 4:
+                    n, r, lat, lon = item  # type: ignore[misc]
+                    self.add_node(n, risk_factor=float(r), lat=lat, lon=lon, overwrite=overwrite)
+                else:
+                    raise ValueError("Node tuple must be (id), (id,risk), (id,risk,lat), or (id,risk,lat,lon)")
             else:
-                self.add_node(item, risk_factor=default_risk, coverage=default_coverage, overwrite=overwrite)  # type: ignore[arg-type]
+                self.add_node(item, risk_factor=default_risk, lat=default_lat, lon=default_lon, overwrite=overwrite)  # type: ignore[arg-type]
 
     def has_node(self, node: NodeId) -> bool:
         return node in self._nodes
@@ -125,22 +143,12 @@ class Graph:
             raise KeyError(f"Node not found: {node!r}")
         self._nodes[node].risk_factor = float(risk_factor)
 
-    def set_coverage(self, node: NodeId, coverage: float) -> None:
-        if node not in self._nodes:
-            raise KeyError(f"Node not found: {node!r}")
-        self._nodes[node].coverage = float(coverage)
-
     def get_risk_factor(self, node: NodeId) -> float:
         if node not in self._nodes:
             raise KeyError(f"Node not found: {node!r}")
         return self._nodes[node].risk_factor
 
-    def get_coverage(self, node: NodeId) -> float:
-        if node not in self._nodes:
-            raise KeyError(f"Node not found: {node!r}")
-        return self._nodes[node].coverage
-
-    def get_node_attrs(self, node: NodeId) -> NodeAttrs:
+    def get_node(self, node: NodeId) -> Node:
         if node not in self._nodes:
             raise KeyError(f"Node not found: {node!r}")
         return self._nodes[node]
@@ -190,7 +198,7 @@ class Graph:
     def nodes(self) -> Iterator[NodeId]:
         return iter(self._nodes.keys())
 
-    def node_items(self) -> Iterator[Tuple[NodeId, NodeAttrs]]:
+    def node_items(self) -> Iterator[Tuple[NodeId, Node]]:
         return iter(self._nodes.items())
 
     def edges(self) -> Iterator[Tuple[NodeId, NodeId, float]]:
@@ -226,16 +234,15 @@ class Graph:
     def total_risk(self) -> float:
         return sum(attrs.risk_factor for attrs in self._nodes.values())
 
-    def total_coverage(self) -> float:
-        return sum(attrs.coverage for attrs in self._nodes.values())
+    # coverage attribute removed; no total_coverage
 
     # --------- Serialization ---------
     def to_dict(self) -> Dict[str, object]:
         """Serialize graph to a plain dict (JSON-friendly)."""
 
-        nodes: List[Tuple[str, float, float]] = []
-        for n, attrs in self._nodes.items():
-            nodes.append((repr(n), attrs.risk_factor, attrs.coverage))
+        nodes: List[Tuple[str, float, Optional[float], Optional[float]]] = []
+        for n, node in self._nodes.items():
+            nodes.append((repr(n), node.risk_factor, node.lat, node.lon))
 
         edges: List[Tuple[str, str, float]] = []
         for u, v, w in self.edges():

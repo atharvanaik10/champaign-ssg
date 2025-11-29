@@ -3,8 +3,8 @@ Hardcoded UIUC campus street-intersection graph with minimal attributes.
 
 This version uses a fixed set of real intersections around the UIUC campus core
 (bounded approximately by Springfield Ave (N), Gregory Dr (S), Wright St (W),
-and Lincoln Ave (E)). All node attributes are set to 1, and all edge weights
-are set to 1. No Gaussian risk models, hotspots, or coverage — just a simple
+and Lincoln Ave (E)). All nodes have risk_factor=1.0 (no lat/lon specified), and all edge weights
+are set to 1. No Gaussian risk models or hotspots — just a simple
 unweighted grid-like graph of major campus streets.
 
 Usage
@@ -24,7 +24,7 @@ def build_grid_part() -> Graph:
     - North/South: Wright St, Goodwin Ave, Mathews Ave, Lincoln Ave
 
     Edges connect adjacent intersections along each street, forming a grid.
-    All edge weights are 1. All nodes have risk_factor=1.0 and no coverage.
+    All edge weights are 1. All nodes have risk_factor=1.0.
     """
 
     g = Graph()
@@ -32,9 +32,10 @@ def build_grid_part() -> Graph:
     streets_ew = ["University Ave", "Clark St", "Main St", "White St", 
                   "Stoughton St", "Springfield Ave", "Healey St", "Green St", 
                   "John St", "Daniel St", "Chalmers St", "Armory Ave"]
-    streets_ns = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", "Wright St"]
+    streets_ns = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", 
+                  "Wright St"]
 
-    # Create nodes for each intersection with risk_factor=1.0 (no coverage used)
+    # Create nodes for each intersection with risk_factor=1.0
     nodes = [f"{ew} & {ns}" for ew in streets_ew for ns in streets_ns]
     for n in nodes:
         g.add_node(n, risk_factor=1.0)
