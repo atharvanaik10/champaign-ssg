@@ -110,8 +110,8 @@ def main():
     south = 40.09396
     east = -88.21858
     west = -88.24442
-    output_image = "uiuc_osm_graph.png"          # output image path (png/jpg/pdf/svg)
-    output_adjacency = "uiuc_osm_adj.json"       # JSON adjacency list output
+    output_image = "assets/uiuc_osm_graph.png"          # output image path (png/jpg/pdf/svg)
+    output_adjacency = "data/uiuc_osm_adj.json"       # JSON adjacency list output
 
     # 1) Load OSMnx graph from the bounding box
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
