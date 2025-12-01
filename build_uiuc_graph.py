@@ -1,72 +1,73 @@
-"""
-Hardcoded UIUC campus street-intersection graph with minimal attributes.
-
-This version uses a fixed set of real intersections around the UIUC campus core
-(bounded approximately by Springfield Ave (N), Gregory Dr (S), Wright St (W),
-and Lincoln Ave (E)). All nodes have risk_factor=1.0 (no lat/lon specified), and all edge weights
-are set to 1. No Gaussian risk models or hotspots — just a simple
-unweighted grid-like graph of major campus streets.
-
-Usage
------
-python build_uiuc_graph.py
-"""
+"""Minimal UIUC campus graph + optional Google geocoding."""
 
 from graph import Graph
+import os
+import json
+from urllib.parse import urlencode, quote_plus
+from urllib.request import urlopen
+from dotenv import load_dotenv
+
+load_dotenv() 
 
 
-def build_grid_part() -> Graph:
-    """Create a simple hardcoded UIUC campus intersection graph.
-
-    Intersections are labeled as "<Street_EW> & <Street_NS>". Streets chosen
-    are common throughfares in the campus core:
-    - East/West: Springfield Ave, Green St, Armory Ave, Gregory Dr
-    - North/South: Wright St, Goodwin Ave, Mathews Ave, Lincoln Ave
-
-    Edges connect adjacent intersections along each street, forming a grid.
-    All edge weights are 1. All nodes have risk_factor=1.0.
-    """
-
+def build_grid_part():
     g = Graph()
 
-    streets_ew = ["University Ave", "Clark St", "Main St", "White St", 
+   
+    streets_ns = ["University Ave", "Clark St", "Main St", "White St", 
                   "Stoughton St", "Springfield Ave", "Healey St", "Green St", 
                   "John St", "Daniel St", "Chalmers St", "Armory Ave"]
-    streets_ns = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", 
+    streets_ew = ["1st St", "2nd St", "3rd St", "4th St", "5th St", "6th St", 
                   "Wright St"]
+    
+    for ew in streets_ew:
+        for ns in streets_ns:
+            g.add_node(f"{ew} & {ns}", risk_factor=1.0)
 
-    # Create nodes for each intersection with risk_factor=1.0
-    nodes = [f"{ew} & {ns}" for ew in streets_ew for ns in streets_ns]
-    for n in nodes:
-        g.add_node(n, risk_factor=1.0)
-
-    # Helper to format node IDs
-    def nid(ew: str, ns: str) -> str:
+    def nid(ew, ns):
         return f"{ew} & {ns}"
 
-    # Connect intersections horizontally (along each E/W street)
     for ew in streets_ew:
         for i in range(len(streets_ns) - 1):
-            u = nid(ew, streets_ns[i])
-            v = nid(ew, streets_ns[i + 1])
-            g.add_edge(u, v, weight=1.0)
+            g.add_edge(nid(ew, streets_ns[i]), nid(ew, streets_ns[i + 1]), weight=1.0)
 
-    # Connect intersections vertically (along each N/S street)
     for ns in streets_ns:
         for j in range(len(streets_ew) - 1):
-            u = nid(streets_ew[j], ns)
-            v = nid(streets_ew[j + 1], ns)
-            g.add_edge(u, v, weight=1.0)
+            g.add_edge(nid(streets_ew[j], ns), nid(streets_ew[j + 1], ns), weight=1.0)
 
     return g
 
 
-def main() -> None:
-    outfile = "uiuc_campus_graph.pkl"
+def build_other_part(g):
+    return g
+
+
+def geocode_address(address, api_key):
+    base = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {"address": address, "key": api_key}
+    url = f"{base}?{urlencode(params, quote_via=quote_plus)}"
+    try:
+        with urlopen(url, timeout=10) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+        loc = payload["results"][0]["geometry"]["location"]
+        return float(loc["lat"]), float(loc["lng"])
+    except Exception:
+        raise RuntimeError(f"Failed to geocode: {address}")
+
+
+def populate_lat_lon_with_google(g, api_key=None, city_suffix="Champaign"):
+    key = api_key or os.getenv("GOOGLE_MAPS_API_KEY")
+    for nid in g.nodes():
+        lat, lon = geocode_address(f"{nid} {city_suffix}", key)
+        node = g.get_node(nid)
+        node.lat = lat
+        node.lon = lon
+
+
+def main():
     g = build_grid_part()
-    g.verify_undirected_invariants()
-    g.save_pickle(outfile)
-    print(f"Saved graph with {g.number_of_nodes()} nodes and {g.number_of_edges()} edges to {outfile}")
+    g.save_pickle("uiuc_campus_graph.pkl")
+    print(f"Saved graph: nodes={g.number_of_nodes()} edges={g.number_of_edges()}")
 
 
 if __name__ == "__main__":

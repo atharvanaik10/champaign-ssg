@@ -33,3 +33,18 @@ print(g.total_risk())                 # 1.3
 
 Nodes are represented by a `Node` class with id, `risk_factor`, and optional `lat`/`lon`.
 Edges are undirected; the class keeps both directions consistent.
+
+### Geocoding Coordinates
+
+To populate node coordinates via Google Maps Geocoding API:
+
+```
+from build_uiuc_graph import build_grid_part, populate_lat_lon_with_google
+
+g = build_grid_part()
+populate_lat_lon_with_google(g)  # uses GOOGLE_MAPS_API_KEY
+```
+
+Notes:
+- Set `GOOGLE_MAPS_API_KEY` in your environment or in a `.env` file.
+- The address queried is `"<node_id> Champaign"` by default.
