@@ -19,6 +19,8 @@ Requirements
 import networkx as nx
 import osmnx as ox
 import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
 
 
 def to_simple_graph(G_multi):
@@ -79,6 +81,56 @@ def plot_graph(G, out_path="uiuc_osm_graph.png", dpi=200):
     return out_path
 
 
+def haversine_dist(lat1, lon1, lat2, lon2):
+    R = 6371000.0
+    lat1 = np.radians(lat1)
+    lon1 = np.radians(lon1)
+    lat2 = np.radians(lat2)
+    lon2 = np.radians(lon2)
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
+    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+    return R * c
+
+
+def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat", lon_col="lon", sev_col="severity"):
+    df = pd.read_csv(csv_path)
+
+    nodes = list(G.nodes())
+    node_lats = np.array([G.nodes[n]["lat"] for n in nodes], dtype=float)
+    node_lons = np.array([G.nodes[n]["lon"] for n in nodes], dtype=float)
+
+    # Initialize per-node accumulators
+    for n in nodes:
+        G.nodes[n]["crimes"] = []
+        G.nodes[n]["_sev_sum"] = 0.0
+        G.nodes[n]["_sev_count"] = 0
+
+    for _, row in df.iterrows():
+        clat = float(row[lat_col])
+        clon = float(row[lon_col])
+        cnum = str(row[id_col])
+        csev = float(row[sev_col])
+
+        # Compute distances to all nodes, pick nearest
+        dists = haversine_dist(clat, clon, node_lats, node_lons)
+        idx = int(np.argmin(dists))
+        nid = nodes[idx]
+
+        G.nodes[nid]["crimes"].append(cnum)
+        G.nodes[nid]["_sev_sum"] += csev
+        G.nodes[nid]["_sev_count"] += 1
+
+    # Finalize risk_factor as average severity at each node
+    for n in nodes:
+        cnt = G.nodes[n]["_sev_count"]
+        if cnt > 0:
+            G.nodes[n]["risk_factor"] = G.nodes[n]["_sev_sum"] / cnt
+        # Clean up temp fields
+        G.nodes[n].pop("_sev_sum", None)
+        G.nodes[n].pop("_sev_count", None)
+
 def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
     """Save a simple JSON adjacency list with node attributes.
 
@@ -92,12 +144,15 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
 
     adj = {}
     for n, data in G.nodes(data=True):
-        adj[str(n)] = {
+        entry = {
             "lat": data.get("lat"),
             "lon": data.get("lon"),
             "risk_factor": data.get("risk_factor", 1.0),
             "neighbors": [str(v) for v in G.neighbors(n)],
         }
+        if "crimes" in data:
+            entry["crimes"] = [str(x) for x in data["crimes"]]
+        adj[str(n)] = entry
 
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(adj, f, ensure_ascii=False, indent=2)
@@ -110,8 +165,9 @@ def main():
     south = 40.09396
     east = -88.21858
     west = -88.24442
-    output_image = "assets/uiuc_osm_graph.png"          # output image path (png/jpg/pdf/svg)
-    output_adjacency = "data/uiuc_osm_adj.json"       # JSON adjacency list output
+    output_image = "assets/uiuc_graph.png"          # output image path (png/jpg/pdf/svg)
+    output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
+    crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
 
     # 1) Load OSMnx graph from the bounding box
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
@@ -123,7 +179,9 @@ def main():
     out_img = plot_graph(G_raw, out_path=output_image)
     print(f"Saved plot to: {out_img}")
 
-    # 4) Export simple adjacency list JSON
+    # 4) Attach crimes to the simple graph and export adjacency
+    if crimes_csv:
+        attach_crimes_to_graph(G, crimes_csv)
     out_adj = save_adjacency_json(G, output_adjacency)
     print(f"Saved adjacency JSON to: {out_adj}")
 

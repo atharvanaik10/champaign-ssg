@@ -163,15 +163,12 @@ def save_as_csv(df, output_path):
 if __name__ == "__main__":
     input_path = INPUT_PATH
     output_path = "data/crime_log_processed"
-    # df = pd.read_excel(input_path)
+    df = pd.read_excel(input_path)
 
-    # df = geocode_locations(df, address_column="Location")
-    # save_as_csv(df, output_path + "_location.csv")
-
-
-    df = pd.read_csv("data/crime_log_processed_location.csv")
+    df = geocode_locations(df, address_column="Location")
+    save_as_csv(df, output_path + "_location.csv")
     df = df.dropna()
     df["severity"] = df["Description"].apply(get_severity)
-    save_as_csv(df, output_path + "_full.csv")
+    save_as_csv(df, output_path + ".csv")
 
     print(f"Saved: {output_path}")
