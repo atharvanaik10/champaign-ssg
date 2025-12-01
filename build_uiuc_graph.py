@@ -81,6 +81,29 @@ def plot_graph(G, out_path="uiuc_osm_graph.png", dpi=200):
     return out_path
 
 
+def plot_simple_graph(G: nx.Graph, out_path="uiuc_osm_graph_simple.png", dpi=200):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 8), dpi=dpi)
+
+    # Draw edges as straight lines between node positions
+    for u, v in G.edges():
+        x = [G.nodes[u]["lon"], G.nodes[v]["lon"]]
+        y = [G.nodes[u]["lat"], G.nodes[v]["lat"]]
+        ax.plot(x, y, color="#222222", linewidth=0.3, alpha=0.9)
+
+    # Draw nodes
+    xs = [data["lon"] for _, data in G.nodes(data=True)]
+    ys = [data["lat"] for _, data in G.nodes(data=True)]
+    ax.scatter(xs, ys, s=5, color="#444444", zorder=3)
+
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.axis("off")
+    fig.savefig(out_path, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
+
+
 def haversine_dist(lat1, lon1, lat2, lon2):
     R = 6371000.0
     lat1 = np.radians(lat1)
@@ -165,19 +188,28 @@ def main():
     south = 40.09396
     east = -88.21858
     west = -88.24442
-    output_image = "assets/uiuc_graph.png"          # output image path (png/jpg/pdf/svg)
+    output_image = "assets/uiuc_graph.png"            # original OSMnx graph image
+    output_simple_image = "assets/uiuc_graph_simple.png"  # simple graph image
     output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
     crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
 
     # 1) Load OSMnx graph from the bounding box
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
 
+    # 1b) Consolidate intersections within a small tolerance (meters)
+    G_temp = ox.project_graph(G_raw)
+    G_consolidated = ox.consolidate_intersections(G_temp, tolerance=15, rebuild_graph=True)
+    G_consolidated = ox.project_graph(G_consolidated, to_crs="EPSG:4326")
+
     # 2) Convert to simple undirected graph with lat/lon/risk_factor
-    G = to_simple_graph(G_raw)
+    G = to_simple_graph(G_consolidated)
 
     # 3) Plot/export image (plot the original OSMnx graph for best fidelity)
-    out_img = plot_graph(G_raw, out_path=output_image)
+    out_img = plot_graph(G_consolidated, out_path=output_image)
     print(f"Saved plot to: {out_img}")
+    # Also plot the simplified graph G using a lightweight matplotlib plotter
+    out_img_simple = plot_simple_graph(G, out_path=output_simple_image)
+    print(f"Saved simple plot to: {out_img_simple}")
 
     # 4) Attach crimes to the simple graph and export adjacency
     attach_crimes_to_graph(G, crimes_csv)
