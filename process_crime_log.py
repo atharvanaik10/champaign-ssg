@@ -114,23 +114,17 @@ def get_severity(description, api_key=None, cache_path="severity_cache.json"):
     )
     user = f"Crime description: {description}\nSeverity (1-5) only:"
     enforce_openai_rate_limit()
-    resp = client.chat.completions.create(
+    resp = client.responses.create(
         model="gpt-5-nano",
-        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
-        temperature=0,
-        top_p=1,
-        max_completion_tokens=3,
+        input=f"{system}\n\n{user}"
     )
     # count the request for rate tracking
     global _rate_window_count
     _rate_window_count += 1
-    sev = int(resp.choices[0].message.content.strip())
+    sev = int(resp.output_text.strip())
     cache[norm] = sev
     save_severity_cache(cache, cache_path)
     return sev
-
-
-
 
 def geocode_locations(df, address_column="Location", api_key=None):
     base_url = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -140,7 +134,11 @@ def geocode_locations(df, address_column="Location", api_key=None):
     total = len(addrs)
     print(f"Geocoding {total} addresses...")
     for i, address in enumerate(addrs, 1):
-        params = {"address": address + " Champaign", "key": key}
+        # Remove 'University of Illinois' if present (case-insensitive), then tidy spaces/commas
+        cleaned = re.sub(r"(?i)university of illinois", "", address)
+        cleaned = re.sub(r"\s+", " ", cleaned)
+        cleaned = cleaned.strip(" ,")
+        params = {"address": cleaned + " Champaign", "key": key}
         url = f"{base_url}?{urllib.parse.urlencode(params)}"
         with urllib.request.urlopen(url) as resp:
             data = json.loads(resp.read().decode("utf-8"))
@@ -165,11 +163,14 @@ def save_as_csv(df, output_path):
 if __name__ == "__main__":
     input_path = INPUT_PATH
     output_path = "data/crime_log_processed"
-    df = pd.read_excel(input_path)
+    # df = pd.read_excel(input_path)
 
-    df = geocode_locations(df, address_column="Location")
-    save_as_csv(df, output_path + "_location.csv")
+    # df = geocode_locations(df, address_column="Location")
+    # save_as_csv(df, output_path + "_location.csv")
 
+
+    df = pd.read_csv("data/crime_log_processed_location.csv")
+    df = df.dropna()
     df["severity"] = df["Description"].apply(get_severity)
     save_as_csv(df, output_path + "_full.csv")
 

@@ -39,6 +39,14 @@ def build_grid_part():
 
 
 def build_other_part(g):
+    # Neil & [University, Springfield, Green, Stadium, Kirby, St. Marys]
+    # Oak & [John, Daniel, Chalmers, Armory, Gregory, Stadium, Kirby, St. Marys]
+    # Locust & [Green, John, Daniel, Chalmers, Armory]
+    # North Quad
+    # Bardeen Quad
+    # Main Quad
+
+
     return g
 
 
@@ -55,7 +63,7 @@ def geocode_address(address, api_key):
         raise RuntimeError(f"Failed to geocode: {address}")
 
 
-def populate_lat_lon_with_google(g, api_key=None, city_suffix="Champaign"):
+def populate_lat_lon(g, api_key=None, city_suffix="Champaign"):
     key = api_key or os.getenv("GOOGLE_MAPS_API_KEY")
     for nid in g.nodes():
         lat, lon = geocode_address(f"{nid} {city_suffix}", key)
@@ -66,9 +74,10 @@ def populate_lat_lon_with_google(g, api_key=None, city_suffix="Champaign"):
 
 def main():
     g = build_grid_part()
+    # TODO build other part
+    populate_lat_lon(g)
     g.save_pickle("uiuc_campus_graph.pkl")
     print(f"Saved graph: nodes={g.number_of_nodes()} edges={g.number_of_edges()}")
-
 
 if __name__ == "__main__":
     main()
