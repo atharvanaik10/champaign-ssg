@@ -145,11 +145,13 @@ def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat"
         G.nodes[nid]["_sev_sum"] += csev
         G.nodes[nid]["_sev_count"] += 1
 
-    # Finalize risk_factor as average severity at each node
+    # Finalize risk_factor as severity scaled by crime count (log-damped)
     for n in nodes:
         cnt = G.nodes[n]["_sev_count"]
         if cnt > 0:
-            G.nodes[n]["risk_factor"] = G.nodes[n]["_sev_sum"] / cnt
+            avg = G.nodes[n]["_sev_sum"] / cnt
+            # Scale by log1p(count) to reward busier nodes without exploding
+            G.nodes[n]["risk_factor"] = float(avg * (1.0 + np.log1p(cnt)))
         # Clean up temp fields
         G.nodes[n].pop("_sev_sum", None)
         G.nodes[n].pop("_sev_count", None)
