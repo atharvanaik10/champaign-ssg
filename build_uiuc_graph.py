@@ -68,7 +68,7 @@ def plot_graph(G, out_path="uiuc_osm_graph.png", dpi=200):
     """Plot the graph with OSMnx/matplotlib and export to an image file."""
     fig, ax = ox.plot_graph(
         G,
-        node_size=3,
+        node_size=10,
         node_color="#444444",
         edge_color="#222222",
         edge_linewidth=0.4,
@@ -180,8 +180,7 @@ def main():
     print(f"Saved plot to: {out_img}")
 
     # 4) Attach crimes to the simple graph and export adjacency
-    if crimes_csv:
-        attach_crimes_to_graph(G, crimes_csv)
+    attach_crimes_to_graph(G, crimes_csv)
     out_adj = save_adjacency_json(G, output_adjacency)
     print(f"Saved adjacency JSON to: {out_adj}")
 
