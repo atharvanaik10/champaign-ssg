@@ -104,6 +104,33 @@ def plot_simple_graph(G: nx.Graph, out_path="uiuc_osm_graph_simple.png", dpi=200
     return out_path
 
 
+def plot_risk_graph(G: nx.Graph, out_path="assets/uiuc_graph_risk.png"):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Draw edges
+    for u, v in G.edges():
+        x = [G.nodes[u]["lon"], G.nodes[v]["lon"]]
+        y = [G.nodes[u]["lat"], G.nodes[v]["lat"]]
+        ax.plot(x, y, color="#000000", linewidth=1.1, zorder=1)
+
+    # Node sizes based on risk_factor
+    xs, ys, sizes = [], [], []
+    for _, data in G.nodes(data=True):
+        xs.append(data["lon"])
+        ys.append(data["lat"])
+        rf = float(data.get("risk_factor", 1.0))
+        sizes.append(20 * rf)  
+
+    ax.scatter(xs, ys, s=sizes, c="#d62728", alpha=0.6, edgecolors="none", zorder=2)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.axis("off")
+    fig.savefig(out_path, bbox_inches="tight", dpi=200)
+    plt.close(fig)
+    return out_path
+
+
 def haversine_dist(lat1, lon1, lat2, lon2):
     R = 6371000.0
     lat1 = np.radians(lat1)
@@ -194,6 +221,7 @@ def main():
     output_simple_image = "assets/uiuc_graph_simple.png"  # simple graph image
     output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
     crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
+    output_risk_image = "assets/uiuc_graph_risk.png"   # risk-scaled nodes image
 
     # 1) Load OSMnx graph from the bounding box
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
@@ -217,6 +245,10 @@ def main():
     attach_crimes_to_graph(G, crimes_csv)
     out_adj = save_adjacency_json(G, output_adjacency)
     print(f"Saved adjacency JSON to: {out_adj}")
+
+    # 5) Plot risk-scaled node sizes
+    out_risk = plot_risk_graph(G, out_path=output_risk_image)
+    print(f"Saved risk plot to: {out_risk}")
 
 
 if __name__ == "__main__":
