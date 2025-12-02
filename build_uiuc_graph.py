@@ -16,11 +16,11 @@ Requirements
   Install with: `pip install osmnx networkx matplotlib`
 """
 
-import networkx as nx
-import osmnx as ox
 import matplotlib.pyplot as plt
-import pandas as pd
+import networkx as nx
 import numpy as np
+import osmnx as ox
+import pandas as pd
 
 
 def to_simple_graph(G_multi):
@@ -117,7 +117,14 @@ def haversine_dist(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat", lon_col="lon", sev_col="severity"):
+def attach_crimes_to_graph(
+    G: nx.Graph,
+    csv_path,
+    id_col="Number",
+    lat_col="lat",
+    lon_col="lon",
+    sev_col="severity",
+):
     df = pd.read_csv(csv_path)
 
     nodes = list(G.nodes())
@@ -156,6 +163,7 @@ def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat"
         G.nodes[n].pop("_sev_sum", None)
         G.nodes[n].pop("_sev_count", None)
 
+
 def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
     """Save a simple JSON adjacency list with node attributes.
 
@@ -183,6 +191,7 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
         json.dump(adj, f, ensure_ascii=False, indent=2)
     return out_path
 
+
 def main():
     # Fill these in as needed (WGS84 degrees)
     # Example bbox roughly covering the UIUC campus area
@@ -190,17 +199,21 @@ def main():
     south = 40.09396
     east = -88.21858
     west = -88.24442
-    output_image = "assets/uiuc_graph.png"            # original OSMnx graph image
+    output_image = "assets/uiuc_graph.png"  # original OSMnx graph image
     output_simple_image = "assets/uiuc_graph_simple.png"  # simple graph image
-    output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
-    crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
+    output_adjacency = "data/uiuc_graph.json"  # JSON adjacency list output
+    crimes_csv = "data/crime_log_processed.csv"  # processed crimes CSV (Number, lat, lon, severity)
 
     # 1) Load OSMnx graph from the bounding box
-    G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
+    G_raw = ox.graph_from_bbox(
+        [west, south, east, north], network_type="drive", simplify=True
+    )
 
     # 1b) Consolidate intersections within a small tolerance (meters)
     G_temp = ox.project_graph(G_raw)
-    G_consolidated = ox.consolidate_intersections(G_temp, tolerance=15, rebuild_graph=True)
+    G_consolidated = ox.consolidate_intersections(
+        G_temp, tolerance=15, rebuild_graph=True
+    )
     G_consolidated = ox.project_graph(G_consolidated, to_crs="EPSG:4326")
 
     # 2) Convert to simple undirected graph with lat/lon/risk_factor

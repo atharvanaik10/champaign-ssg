@@ -288,9 +288,22 @@ def main():
 
     start_idx = 0
     T = 48
-    base_num_units = 3
+    base_num_units = 5
     p_event = 0.3
     num_runs = 300
+
+    # --- NEW: generate one concrete SSG patrol schedule and save to CSV ---
+    print("\nSimulating SSG patrol to generate patrol_schedule.csv ...")
+    schedule = simulate_patrol(
+        P_ssg,
+        node_list,
+        start_idx=start_idx,
+        T=T,
+        num_units=base_num_units,
+    )
+    df_schedule = pd.DataFrame(schedule, columns=["time_step", "unit_id", "node_id"])
+    df_schedule.to_csv("patrol_schedule.csv", index=False)
+    print("Saved patrol schedule to patrol_schedule.csv")
 
     # --- fixed units comparison (simple model) ---
     print(f"\nEvaluating SSG policy (units={base_num_units})...")
@@ -324,7 +337,7 @@ def main():
     )
 
     # --- Figure 2: efficiency vs units ---
-    units_list = [1, 2, 3, 4, 5]
+    units_list = [i for i in range(1, 10)]
     means_ssg = []
     means_uniform = []
 
