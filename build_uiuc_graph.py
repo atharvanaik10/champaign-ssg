@@ -16,11 +16,11 @@ Requirements
   Install with: `pip install osmnx networkx matplotlib`
 """
 
-import matplotlib.pyplot as plt
 import networkx as nx
-import numpy as np
 import osmnx as ox
+import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
 
 def to_simple_graph(G_multi):
@@ -104,6 +104,33 @@ def plot_simple_graph(G: nx.Graph, out_path="uiuc_osm_graph_simple.png", dpi=200
     return out_path
 
 
+def plot_risk_graph(G: nx.Graph, out_path="assets/uiuc_graph_risk.png"):
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    # Draw edges
+    for u, v in G.edges():
+        x = [G.nodes[u]["lon"], G.nodes[v]["lon"]]
+        y = [G.nodes[u]["lat"], G.nodes[v]["lat"]]
+        ax.plot(x, y, color="#000000", linewidth=1.1, zorder=1)
+
+    # Node sizes based on risk_factor
+    xs, ys, sizes = [], [], []
+    for _, data in G.nodes(data=True):
+        xs.append(data["lon"])
+        ys.append(data["lat"])
+        rf = float(data.get("risk_factor", 1.0))
+        sizes.append(20 * rf)  
+
+    ax.scatter(xs, ys, s=sizes, c="#d62728", alpha=0.6, edgecolors="none", zorder=2)
+    ax.set_aspect("equal", adjustable="datalim")
+    ax.axis("off")
+    fig.savefig(out_path, bbox_inches="tight", dpi=200)
+    plt.close(fig)
+    return out_path
+
+
 def haversine_dist(lat1, lon1, lat2, lon2):
     R = 6371000.0
     lat1 = np.radians(lat1)
@@ -117,14 +144,7 @@ def haversine_dist(lat1, lon1, lat2, lon2):
     return R * c
 
 
-def attach_crimes_to_graph(
-    G: nx.Graph,
-    csv_path,
-    id_col="Number",
-    lat_col="lat",
-    lon_col="lon",
-    sev_col="severity",
-):
+def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat", lon_col="lon", sev_col="severity"):
     df = pd.read_csv(csv_path)
 
     nodes = list(G.nodes())
@@ -163,7 +183,6 @@ def attach_crimes_to_graph(
         G.nodes[n].pop("_sev_sum", None)
         G.nodes[n].pop("_sev_count", None)
 
-
 def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
     """Save a simple JSON adjacency list with node attributes.
 
@@ -191,7 +210,6 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
         json.dump(adj, f, ensure_ascii=False, indent=2)
     return out_path
 
-
 def main():
     # Fill these in as needed (WGS84 degrees)
     # Example bbox roughly covering the UIUC campus area
@@ -199,21 +217,18 @@ def main():
     south = 40.09396
     east = -88.21858
     west = -88.24442
-    output_image = "assets/uiuc_graph.png"  # original OSMnx graph image
+    output_image = "assets/uiuc_graph.png"            # original OSMnx graph image
     output_simple_image = "assets/uiuc_graph_simple.png"  # simple graph image
-    output_adjacency = "data/uiuc_graph.json"  # JSON adjacency list output
-    crimes_csv = "data/crime_log_processed.csv"  # processed crimes CSV (Number, lat, lon, severity)
+    output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
+    crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
+    output_risk_image = "assets/uiuc_graph_risk.png"   # risk-scaled nodes image
 
     # 1) Load OSMnx graph from the bounding box
-    G_raw = ox.graph_from_bbox(
-        [west, south, east, north], network_type="drive", simplify=True
-    )
+    G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
 
     # 1b) Consolidate intersections within a small tolerance (meters)
     G_temp = ox.project_graph(G_raw)
-    G_consolidated = ox.consolidate_intersections(
-        G_temp, tolerance=15, rebuild_graph=True
-    )
+    G_consolidated = ox.consolidate_intersections(G_temp, tolerance=15, rebuild_graph=True)
     G_consolidated = ox.project_graph(G_consolidated, to_crs="EPSG:4326")
 
     # 2) Convert to simple undirected graph with lat/lon/risk_factor
@@ -230,6 +245,10 @@ def main():
     attach_crimes_to_graph(G, crimes_csv)
     out_adj = save_adjacency_json(G, output_adjacency)
     print(f"Saved adjacency JSON to: {out_adj}")
+
+    # 5) Plot risk-scaled node sizes
+    out_risk = plot_risk_graph(G, out_path=output_risk_image)
+    print(f"Saved risk plot to: {out_risk}")
 
 
 if __name__ == "__main__":
