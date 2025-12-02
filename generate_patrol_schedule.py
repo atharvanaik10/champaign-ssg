@@ -112,7 +112,7 @@ def solve_ssg(R_d, P_d, R_a, P_a, w, K):
 
         Ud_attacked = x[attacked] * R_d[attacked] + (1 - x[attacked]) * P_d[attacked]
         prob = cp.Problem(cp.Maximize(Ud_attacked), constraints)
-        prob.solve()  # let cvxpy pick a solver
+        prob.solve(solver=cp.ECOS)  # let cvxpy pick a solver
 
         if x.value is None or prob.status not in ("optimal", "optimal_inaccurate"):
             continue
@@ -275,7 +275,7 @@ def main():
     node_list, risk = get_node_list_and_risk(G)
 
     # --- Stackelberg game ---
-    R_d, P_d, R_a, P_a = build_payoffs_from_risk(risk, 1.0, 1.0, 1.0)
+    R_d, P_d, R_a, P_a = build_payoffs_from_risk(risk, 1.0, 1.0, 1.0, 1.0)
     K = 10.0
     w = np.ones_like(risk)
 

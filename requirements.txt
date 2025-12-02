@@ -25,3 +25,5 @@ typing_extensions==4.15.0
 tzdata==2025.2
 cvxpy==1.7.4
 matplotlib
+ecos
+networkx
