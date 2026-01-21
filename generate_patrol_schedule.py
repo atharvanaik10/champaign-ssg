@@ -287,7 +287,7 @@ def main():
     P_uniform = build_uniform_transition_matrix(G, node_list)
 
     start_idx = 0
-    T = 48
+    T = 480
     base_num_units = 5
     p_event = 0.3
     num_runs = 300
@@ -306,77 +306,77 @@ def main():
     print("Saved patrol schedule to patrol_schedule.csv")
 
     # --- fixed units comparison (simple model) ---
-    print(f"\nEvaluating SSG policy (units={base_num_units})...")
-    effs_ssg = evaluate_policy(
-        P_ssg,
-        node_list,
-        risk,
-        T=T,
-        num_units=base_num_units,
-        p_event=p_event,
-        start_idx=start_idx,
-        num_runs=num_runs,
-    )
+    # print(f"\nEvaluating SSG policy (units={base_num_units})...")
+    # effs_ssg = evaluate_policy(
+    #     P_ssg,
+    #     node_list,
+    #     risk,
+    #     T=T,
+    #     num_units=base_num_units,
+    #     p_event=p_event,
+    #     start_idx=start_idx,
+    #     num_runs=num_runs,
+    # )
 
-    print(f"\nEvaluating Uniform policy (units={base_num_units})...")
-    effs_uniform = evaluate_policy(
-        P_uniform,
-        node_list,
-        risk,
-        T=T,
-        num_units=base_num_units,
-        p_event=p_event,
-        start_idx=start_idx,
-        num_runs=num_runs,
-    )
+    # print(f"\nEvaluating Uniform policy (units={base_num_units})...")
+    # effs_uniform = evaluate_policy(
+    #     P_uniform,
+    #     node_list,
+    #     risk,
+    #     T=T,
+    #     num_units=base_num_units,
+    #     p_event=p_event,
+    #     start_idx=start_idx,
+    #     num_runs=num_runs,
+    # )
 
-    print(
-        f"\nSimple model, units={base_num_units}: "
-        f"mean efficiency SSG = {effs_ssg.mean():.4f}, "
-        f"Uniform = {effs_uniform.mean():.4f}"
-    )
+    # print(
+    #     f"\nSimple model, units={base_num_units}: "
+    #     f"mean efficiency SSG = {effs_ssg.mean():.4f}, "
+    #     f"Uniform = {effs_uniform.mean():.4f}"
+    # )
 
     # --- Figure 2: efficiency vs units ---
-    units_list = [i for i in range(1, 10)]
-    means_ssg = []
-    means_uniform = []
+    # units_list = [i for i in range(1, 10)]
+    # means_ssg = []
+    # means_uniform = []
 
-    for u in units_list:
-        print(f"\nEvaluating vs num_units={u} ...")
-        effs_ssg_u = evaluate_policy(
-            P_ssg,
-            node_list,
-            risk,
-            T=T,
-            num_units=u,
-            p_event=p_event,
-            start_idx=start_idx,
-            num_runs=num_runs,
-        )
-        effs_uniform_u = evaluate_policy(
-            P_uniform,
-            node_list,
-            risk,
-            T=T,
-            num_units=u,
-            p_event=p_event,
-            start_idx=start_idx,
-            num_runs=num_runs,
-        )
-        means_ssg.append(effs_ssg_u.mean())
-        means_uniform.append(effs_uniform_u.mean())
+    # for u in units_list:
+    #     print(f"\nEvaluating vs num_units={u} ...")
+    #     effs_ssg_u = evaluate_policy(
+    #         P_ssg,
+    #         node_list,
+    #         risk,
+    #         T=T,
+    #         num_units=u,
+    #         p_event=p_event,
+    #         start_idx=start_idx,
+    #         num_runs=num_runs,
+    #     )
+    #     effs_uniform_u = evaluate_policy(
+    #         P_uniform,
+    #         node_list,
+    #         risk,
+    #         T=T,
+    #         num_units=u,
+    #         p_event=p_event,
+    #         start_idx=start_idx,
+    #         num_runs=num_runs,
+    #     )
+    #     means_ssg.append(effs_ssg_u.mean())
+    #     means_uniform.append(effs_uniform_u.mean())
 
-    plt.figure()
-    plt.plot(units_list, means_ssg, marker="o", label="SSG patrol")
-    plt.plot(units_list, means_uniform, marker="s", label="Uniform patrol")
-    plt.xlabel("Number of patrol units")
-    plt.ylabel("Mean efficiency")
-    plt.xticks(units_list)
-    plt.title(f"Efficiency vs patrol units (T={T}, p_event={p_event})")
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig("fig_efficiency_vs_units_nx.png", dpi=300)
-    print("Saved line plot to fig_efficiency_vs_units_nx.png")
+    # plt.figure()
+    # plt.plot(units_list, means_ssg, marker="o", label="SSG patrol")
+    # plt.plot(units_list, means_uniform, marker="s", label="Uniform patrol")
+    # plt.xlabel("Number of patrol units")
+    # plt.ylabel("Mean efficiency")
+    # plt.xticks(units_list)
+    # plt.title(f"Efficiency vs patrol units (T={T}, p_event={p_event})")
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig("fig_efficiency_vs_units_nx.png", dpi=300)
+    # print("Saved line plot to fig_efficiency_vs_units_nx.png")
 
 
 if __name__ == "__main__":

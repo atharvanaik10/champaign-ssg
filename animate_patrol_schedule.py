@@ -88,8 +88,8 @@ def animate_patrols(nodes, edges, units, timesteps, schedule_map, out_path="asse
 
     # Helper to get lon/lat for a node id
     def node_xy(node_id):
-        return nodes[node_id]
-
+        return nodes[str(node_id)]
+    
     # Build frame data: for each timestep, positions per unit
     frame_positions = []
     for t in timesteps:
@@ -128,7 +128,7 @@ def main():
     graph_json = "data/uiuc_graph.json"         # from build_uiuc_graph
     schedule_csv = "patrol_schedule.csv"   # unit_id,time_step,node_id
     output_gif = "assets/patrol_animation.gif"
-    fps = 2
+    fps = 10
 
     nodes, edges = load_graph_from_adjacency(graph_json)
     units, timesteps, schedule_map = load_patrol_schedule(schedule_csv)
