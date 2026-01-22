@@ -2,18 +2,14 @@
 """
 Build a simple NetworkX road graph for UIUC from a bounding box using OSMnx.
 
-What this script does
-- Downloads via `osmnx.graph_from_bbox(..., network_type="drive", simplify=True)`.
+This script:
+- Downloads an OSMnx MultiDiGraph from OpenStreetMaps using a specified bounding box
 - Converts the OSMnx MultiDiGraph into a simple undirected NetworkX Graph.
-- Each node has attributes: `lat`, `lon`, and `risk_factor` (default 1.0). Also keeps `x`,`y` for plotting.
-- Plots the original OSMnx graph to an image file for best fidelity.
+- Assigns node attributes: `lat`, `lon`, and `risk_factor` (default 1.0). Also keeps `x`,`y` for plotting.
+- Exports the graphs as both an adjacency list and an image
 
 Notes
 - Using a bounding box can truncate roads at the boundary — this is expected and OK.
-
-Requirements
-- Python packages: osmnx, networkx, matplotlib
-  Install with: `pip install osmnx networkx matplotlib`
 """
 
 import networkx as nx
@@ -223,7 +219,7 @@ def main():
     crimes_csv = "data/crime_log_processed.csv"         # processed crimes CSV (Number, lat, lon, severity)
     output_risk_image = "assets/uiuc_graph_risk.png"   # risk-scaled nodes image
 
-    # 1) Load OSMnx graph from the bounding box
+    # 1) Load OSMnx graph from the bounding box, this needs to be [W,S,E,N]
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
 
     # 1b) Consolidate intersections within a small tolerance (meters)
