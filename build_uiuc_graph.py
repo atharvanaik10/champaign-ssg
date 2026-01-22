@@ -18,6 +18,13 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 
+DAMPENING_FACTOR = 0.5
+NORTH = 40.11668
+SOUTH = 40.09396
+EAST = -88.21858
+WEST = -88.24442
+
+
 
 def to_simple_graph(G_multi):
     """Convert an OSMnx Multi(Di)Graph to a simple undirected Graph with lat/lon/risk_factor.
@@ -174,7 +181,7 @@ def attach_crimes_to_graph(G: nx.Graph, csv_path, id_col="Number", lat_col="lat"
         if cnt > 0:
             avg = G.nodes[n]["_sev_sum"] / cnt
             # Scale by log1p(count) to reward busier nodes without exploding
-            G.nodes[n]["risk_factor"] = float(avg * (1.0 + np.log1p(cnt)))
+            G.nodes[n]["risk_factor"] = float(avg * ((1.0 + cnt) ** DAMPENING_FACTOR))
         # Clean up temp fields
         G.nodes[n].pop("_sev_sum", None)
         G.nodes[n].pop("_sev_count", None)
@@ -209,10 +216,7 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
 def main():
     # Fill these in as needed (WGS84 degrees)
     # Example bbox roughly covering the UIUC campus area
-    north = 40.11668
-    south = 40.09396
-    east = -88.21858
-    west = -88.24442
+
     output_image = "assets/uiuc_graph.png"            # original OSMnx graph image
     output_simple_image = "assets/uiuc_graph_simple.png"  # simple graph image
     output_adjacency = "data/uiuc_graph.json"         # JSON adjacency list output
@@ -220,7 +224,7 @@ def main():
     output_risk_image = "assets/uiuc_graph_risk.png"   # risk-scaled nodes image
 
     # 1) Load OSMnx graph from the bounding box, this needs to be [W,S,E,N]
-    G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
+    G_raw = ox.graph_from_bbox([WEST, SOUTH, EAST, NORTH], network_type="drive", simplify=True)
 
     # 1b) Consolidate intersections within a small tolerance (meters)
     G_temp = ox.project_graph(G_raw)
