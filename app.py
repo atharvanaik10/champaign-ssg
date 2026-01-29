@@ -68,7 +68,7 @@ def _build_route_url(route_points: list[tuple[float, float]]) -> str | None:
     ]
     if waypoints:
         params.append(f"waypoints={quote_plus(waypoints)}")
-    return f\"https://www.google.com/maps/dir/?api=1&{'&'.join(params)}\"
+    return f"https://www.google.com/maps/dir/?api=1&{'&'.join(params)}"
 
 
 with st.sidebar:
@@ -145,11 +145,11 @@ if run_button:
                     address = _reverse_geocode(lat, lon, maps_api_key)
                 except requests.RequestException:
                     address = None
-                addresses[node_id] = address or f\"{lat:.6f}, {lon:.6f}\"
+                addresses[node_id] = address or f"{lat:.6f}, {lon:.6f}"
             unit_schedule["address"] = unit_schedule["node_id"].map(addresses)
         else:
             unit_schedule["address"] = unit_schedule.apply(
-                lambda row: f\"{row['latitude']:.6f}, {row['longitude']:.6f}\", axis=1
+                lambda row: f"{row['latitude']:.6f}, {row['longitude']:.6f}", axis=1
             )
 
         st.dataframe(
@@ -169,19 +169,19 @@ if run_button:
             st.download_button(
                 "Download schedule CSV",
                 data=csv_bytes,
-                file_name=f\"patrol_schedule_unit_{selected_unit}.csv\",
+                file_name=f"patrol_schedule_unit_{selected_unit}.csv",
             )
         with button_cols[1]:
             if route_url:
-                st.link_button(\"Open route in Google Maps\", route_url)
+                st.link_button("Open route in Google Maps", route_url)
             else:
-                st.button(\"Open route in Google Maps\", disabled=True)
+                st.button("Open route in Google Maps", disabled=True)
 
         if generate_gif:
             st.subheader("Animated route")
             output_dir = Path("cache")
             output_dir.mkdir(parents=True, exist_ok=True)
-            gif_path = output_dir / f\"patrol_animation_unit_{selected_unit}.gif\"
+            gif_path = output_dir / f"patrol_animation_unit_{selected_unit}.gif"
             with st.spinner("Rendering GIF..."):
                 animate_patrols(
                     nodes,
