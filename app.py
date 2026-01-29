@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -136,6 +137,7 @@ if run_button:
         unit_schedule["latitude"] = unit_schedule["node_id"].map(lambda nid: nodes[nid][1])
         unit_schedule["longitude"] = unit_schedule["node_id"].map(lambda nid: nodes[nid][0])
 
+        maps_api_key = os.environ.get("GOOGLE_MAPS_API_KEY", "")
         if maps_api_key:
             addresses = {}
             for node_id in unit_schedule["node_id"].unique():
