@@ -129,10 +129,12 @@ def solve_ssg(R_d, P_d, R_a, P_a, w, K):
 # ---------- 3. Coverage -> patrol schedule on your custom Graph ----------
 
 
-def build_transition_matrix(G: nx.Graph, node_list, coverage: np.ndarray):
+def build_transition_matrix(
+    G: nx.Graph, node_list, coverage: np.ndarray, mix=0.6, eps=1e-6
+):
     """
-    Build a Markov transition matrix P over nodes, biased toward high-coverage nodes.
-    Uses G.neighbors(u) to respect your graph structure.
+    mix=0.0 -> pure uniform random walk
+    mix=1.0 -> pure coverage-biased
     """
     idx = {nid: i for i, nid in enumerate(node_list)}
     n = len(node_list)
@@ -140,20 +142,24 @@ def build_transition_matrix(G: nx.Graph, node_list, coverage: np.ndarray):
 
     for u_i, u in enumerate(node_list):
         nbrs = list(G.neighbors(u))
-
         if not nbrs:
             P[u_i, u_i] = 1.0
             continue
 
-        weights = np.array([coverage[idx[v]] for v in nbrs], dtype=float)
-        if weights.sum() <= 0:
-            weights = np.ones_like(weights)
-        weights /= weights.sum()
+        # uniform component
+        uni = np.ones(len(nbrs), dtype=float)
+        uni /= uni.sum()
 
-        for w_i, v in enumerate(nbrs):
-            P[u_i, idx[v]] = weights[w_i]
+        # coverage-biased component (softened so it doesn't collapse)
+        w = np.array([coverage[idx[v]] for v in nbrs], dtype=float)
+        w = w + eps
+        w /= w.sum()
 
-    assert np.allclose(P.sum(axis=1), 1.0)
+        probs = mix * w + (1 - mix) * uni
+
+        for p, v in zip(probs, nbrs):
+            P[u_i, idx[v]] = p
+
     return P
 
 
@@ -176,16 +182,51 @@ def build_uniform_transition_matrix(G: nx.Graph, node_list):
     return P
 
 
+def pick_diverse_start_nodes(G: nx.Graph, node_list, k: int, seed=0):
+    rng = random.Random(seed)
+
+    # start from a random node, then repeatedly pick the node farthest from chosen set
+    first = rng.choice(node_list)
+    chosen = [first]
+
+    # precompute shortest path lengths from each chosen node as needed
+    for _ in range(1, k):
+        # compute distance to nearest chosen for every node
+        # (do BFS from each chosen node; k is small so this is fine)
+        best_node = None
+        best_dist = -1
+
+        # distances to nearest chosen
+        nearest = {n: float("inf") for n in node_list}
+        for c in chosen:
+            dist = nx.single_source_shortest_path_length(G, c)
+            for n, d in dist.items():
+                if d < nearest[n]:
+                    nearest[n] = d
+
+        for n in node_list:
+            d = nearest[n]
+            if d != float("inf") and d > best_dist:
+                best_dist = d
+                best_node = n
+
+        if best_node is None:
+            best_node = rng.choice(node_list)
+        chosen.append(best_node)
+
+    return chosen
+
+
 def simulate_patrol(P, node_list, start_idx, T, num_units=1):
-    """
-    Random-walk patrol simulation.
-
-    Returns a list of (time_step, unit_id, node_id).
-    """
     n = len(node_list)
-    current = [start_idx] * num_units
-    records = []
 
+    if isinstance(start_idx, (list, tuple, np.ndarray)):
+        assert len(start_idx) == num_units
+        current = [int(s) for s in start_idx]
+    else:
+        current = [int(start_idx)] * num_units
+
+    records = []
     for t in range(T + 1):
         for u in range(num_units):
             records.append((t, u, node_list[current[u]]))
@@ -283,12 +324,13 @@ def main():
     coverage, best_U = solve_ssg(R_d, P_d, R_a, P_a, w, K)
     print(f"Best defender utility: {best_U:.3f}")
 
-    P_ssg = build_transition_matrix(G, node_list, coverage)
+    P_ssg = build_transition_matrix(G, node_list, coverage, mix=0.2)
     P_uniform = build_uniform_transition_matrix(G, node_list)
 
-    start_idx = 0
-    T = 480
+    T = 100
     base_num_units = 5
+    starts = pick_diverse_start_nodes(G, node_list, k=base_num_units, seed=0)
+
     p_event = 0.3
     num_runs = 300
 
@@ -297,7 +339,7 @@ def main():
     schedule = simulate_patrol(
         P_ssg,
         node_list,
-        start_idx=start_idx,
+        start_idx=starts,  # <-- pass a list now
         T=T,
         num_units=base_num_units,
     )
@@ -306,77 +348,79 @@ def main():
     print("Saved patrol schedule to patrol_schedule.csv")
 
     # --- fixed units comparison (simple model) ---
-    # print(f"\nEvaluating SSG policy (units={base_num_units})...")
-    # effs_ssg = evaluate_policy(
-    #     P_ssg,
-    #     node_list,
-    #     risk,
-    #     T=T,
-    #     num_units=base_num_units,
-    #     p_event=p_event,
-    #     start_idx=start_idx,
-    #     num_runs=num_runs,
-    # )
+    print(f"\nEvaluating SSG policy (units={base_num_units})...")
+    effs_ssg = evaluate_policy(
+        P_ssg,
+        node_list,
+        risk,
+        T=T,
+        num_units=base_num_units,
+        p_event=p_event,
+        start_idx=starts,
+        num_runs=num_runs,
+    )
 
-    # print(f"\nEvaluating Uniform policy (units={base_num_units})...")
-    # effs_uniform = evaluate_policy(
-    #     P_uniform,
-    #     node_list,
-    #     risk,
-    #     T=T,
-    #     num_units=base_num_units,
-    #     p_event=p_event,
-    #     start_idx=start_idx,
-    #     num_runs=num_runs,
-    # )
+    print(f"\nEvaluating Uniform policy (units={base_num_units})...")
+    effs_uniform = evaluate_policy(
+        P_uniform,
+        node_list,
+        risk,
+        T=T,
+        num_units=base_num_units,
+        p_event=p_event,
+        start_idx=starts,
+        num_runs=num_runs,
+    )
 
-    # print(
-    #     f"\nSimple model, units={base_num_units}: "
-    #     f"mean efficiency SSG = {effs_ssg.mean():.4f}, "
-    #     f"Uniform = {effs_uniform.mean():.4f}"
-    # )
+    print(
+        f"\nSimple model, units={base_num_units}: "
+        f"mean efficiency SSG = {effs_ssg.mean():.4f}, "
+        f"Uniform = {effs_uniform.mean():.4f}"
+    )
 
     # --- Figure 2: efficiency vs units ---
-    # units_list = [i for i in range(1, 10)]
-    # means_ssg = []
-    # means_uniform = []
+    units_list = [i for i in range(1, 6)]
+    starts_all = pick_diverse_start_nodes(G, node_list, k=max(units_list), seed=0)
+    means_ssg = []
+    means_uniform = []
 
-    # for u in units_list:
-    #     print(f"\nEvaluating vs num_units={u} ...")
-    #     effs_ssg_u = evaluate_policy(
-    #         P_ssg,
-    #         node_list,
-    #         risk,
-    #         T=T,
-    #         num_units=u,
-    #         p_event=p_event,
-    #         start_idx=start_idx,
-    #         num_runs=num_runs,
-    #     )
-    #     effs_uniform_u = evaluate_policy(
-    #         P_uniform,
-    #         node_list,
-    #         risk,
-    #         T=T,
-    #         num_units=u,
-    #         p_event=p_event,
-    #         start_idx=start_idx,
-    #         num_runs=num_runs,
-    #     )
-    #     means_ssg.append(effs_ssg_u.mean())
-    #     means_uniform.append(effs_uniform_u.mean())
+    for u in units_list:
+        starts_u = starts_all[:u]
+        print(f"\nEvaluating vs num_units={u} ...")
+        effs_ssg_u = evaluate_policy(
+            P_ssg,
+            node_list,
+            risk,
+            T=T,
+            num_units=u,
+            p_event=p_event,
+            start_idx=starts_u,
+            num_runs=num_runs,
+        )
+        effs_uniform_u = evaluate_policy(
+            P_uniform,
+            node_list,
+            risk,
+            T=T,
+            num_units=u,
+            p_event=p_event,
+            start_idx=starts_u,
+            num_runs=num_runs,
+        )
+        means_ssg.append(effs_ssg_u.mean())
+        means_uniform.append(effs_uniform_u.mean())
 
-    # plt.figure()
-    # plt.plot(units_list, means_ssg, marker="o", label="SSG patrol")
-    # plt.plot(units_list, means_uniform, marker="s", label="Uniform patrol")
-    # plt.xlabel("Number of patrol units")
-    # plt.ylabel("Mean efficiency")
-    # plt.xticks(units_list)
-    # plt.title(f"Efficiency vs patrol units (T={T}, p_event={p_event})")
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig("fig_efficiency_vs_units_nx.png", dpi=300)
-    # print("Saved line plot to fig_efficiency_vs_units_nx.png")
+    plt.figure()
+    plt.plot(units_list, means_ssg, marker="o", label="SSG patrol")
+    plt.plot(units_list, means_uniform, marker="s", label="Uniform patrol")
+    plt.xlabel("Number of patrol units")
+    plt.ylabel("Mean efficiency")
+    plt.xticks(units_list)
+    plt.title(f"Efficiency vs patrol units (T={T}, p_event={p_event})")
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig("fig_efficiency_vs_units_nx.png", dpi=300)
+    print("Saved line plot to fig_efficiency_vs_units_nx.png")
 
 
 if __name__ == "__main__":
