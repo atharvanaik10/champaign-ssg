@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Iterable
+from typing import Callable, Iterable, Optional
 
 import numpy as np
 import networkx as nx
@@ -58,15 +58,19 @@ def simulate_patrol(
     start_idx: int,
     time_steps: int,
     num_units: int = 1,
+    progress: Optional[Callable[[float, str], None]] = None,
 ) -> list[tuple[int, int, str]]:
     n = len(node_list)
     current = [start_idx] * num_units
     records: list[tuple[int, int, str]] = []
 
+    update_every = max(1, (time_steps + 1) // 50)
     for t in range(time_steps + 1):
         for unit in range(num_units):
             records.append((t, unit, node_list[current[unit]]))
         if t < time_steps:
             for unit in range(num_units):
                 current[unit] = int(np.random.choice(n, p=matrix[current[unit]]))
+        if progress is not None and (t % update_every == 0 or t == time_steps):
+            progress(t / float(time_steps if time_steps > 0 else 1), "Simulating patrol...")
     return records
