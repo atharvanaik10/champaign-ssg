@@ -1,68 +1,75 @@
 # ALMA: Active Law-enforcement Mixed-strategy Allocator
 
-Risk-aware patrol planning for the UIUC/Champaign area using Stackelberg Security Games.
+Risk-aware patrol planning for the UIUC/Champaign area using Stackelberg Security Games (SSG).
 
-## Overview
+## Architecture
 
-This project builds a campus-scale road graph from OpenStreetMap, maps historical crime reports onto that graph to estimate per-node risk, solves a Stackelberg Security Game (SSG) to allocate patrol attention, and then generates and animates concrete patrol routes derived from the optimal coverage distribution.
+ALMA now uses a decoupled architecture:
 
-## What the application does
+- `alma/`: core compute library (graph loading, SSG solve, patrol simulation).
+- `backend/`: FastAPI service for job orchestration, status/progress APIs, graph/schedule endpoints.
+- `frontend/`: SvelteKit + Tailwind app for interactive controls, progress, map playback, and schedule export.
 
-ALMA helps public safety teams experiment with patrol strategies by:
+## Backend (FastAPI)
 
-- Modeling the road network as a graph with per-node risk.
-- Optimizing patrol coverage with a Stackelberg Security Game.
-- Converting coverage probabilities into concrete patrol routes.
-- Visualizing the result as both a schedule table and an animated map.
-
-## Features
-
-- Data ingestion: Parses the UIUC Clery Crime Log (Excel), geocodes locations (Google Maps API), and assigns a severity score (1–5) to each incident using a lightweight classifier (gpt-5-nano) with basic caching.
-- Graph building: Downloads and simplifies an OSM road network for the campus area (OSMnx), consolidates intersections, and exports a JSON adjacency list with per-node lat/lon and risk.
-- Risk modeling: Attaches incidents to the nearest road node and computes a `risk_factor` per node that scales with incident severity and frequency.
-- Game-theoretic allocation: Formulates and solves a single-defender SSG with a resource budget (CVXPy) to produce optimal coverage probabilities over nodes.
-- Patrol synthesis: Converts coverage into a biased Markov policy on the graph and simulates multi-unit random-walk patrols; exports a patrol schedule CSV.
-- Visualization: Animated GIF showing patrol units moving over time on the network.
-- Lightweight graph library: A minimal undirected, weighted graph class for prototyping risk-aware structures and serialization.
-
-## Quickstart
-
-Install dependencies:
+### Install
 
 ```bash
 pip install -r requirements.txt
+pip install -r backend/requirements.txt
 ```
 
-### Run the UI
-
-The Streamlit UI allows you to tune patrol parameters and immediately visualize the resulting schedule and animation.
+### Run
 
 ```bash
-streamlit run app.py
+uvicorn backend.main:app --reload
+# or
+scripts/dev.sh
 ```
 
-### Generate a schedule (CLI)
+Backend runs on `http://localhost:8000`.
+
+### API endpoints
+
+- `POST /jobs`: Start optimization job.
+- `GET /jobs/{job_id}`: Job status, progress, timings, summary.
+- `GET /jobs/{job_id}/schedule?format=json|csv`: Schedule output.
+- `GET /jobs/{job_id}/events`: SSE progress stream.
+- `GET /graph?graph_path=...`: Graph as GeoJSON FeatureCollection.
+
+Progress phases are surfaced from `alma.schedule.generate_patrol_schedule(..., progress=callback)` and stored in the in-process thread-safe job registry.
+
+### Tests
 
 ```bash
-python generate_patrol_schedule.py \
-  --graph data/uiuc_graph.json \
-  --output patrol_schedule.csv \
-  --budget 10 \
-  --num-units 5 \
-  --time-steps 480
+pytest backend/tests
 ```
 
-### Render the animation (CLI)
+## Frontend (SvelteKit + Tailwind)
+
+### Install
 
 ```bash
-python animate_patrol_schedule.py \
-  --graph data/uiuc_graph.json \
-  --schedule patrol_schedule.csv \
-  --output assets/patrol_animation.gif \
-  --fps 10
+cd frontend
+npm install
 ```
 
-## Notes
+### Run
 
-- External services: Uses Google Maps Geocoding API and the OpenAI API for severity classification (both optional with caching/heuristics).
-- Scope: Bounding box and parameters are tuned for UIUC/Champaign but are configurable for other regions or data sources.
+```bash
+npm run dev
+```
+
+Frontend runs on `http://localhost:5173` and calls backend on `http://localhost:8000` (CORS enabled for local dev).
+
+## Frontend features
+
+- Input form for graph and optimization parameters.
+- Job creation and progress via SSE (polling fallback).
+- MapLibre map rendering roads (LineString) + patrol units (Point layer).
+- Playback controls: play/pause, seek slider, FPS control, keyboard shortcuts (`space`, `←`, `→`).
+- Schedule table + CSV download.
+
+## Legacy Streamlit UI
+
+Existing Streamlit scripts remain in the repository for backwards compatibility. The new production path is backend + frontend.
