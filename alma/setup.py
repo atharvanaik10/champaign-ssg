@@ -232,7 +232,6 @@ def build_graph(
     Requires OSMnx. Downloads, simplifies, attaches crime risk, and exports
     adjacency JSON plus preview images.
     """
-    ox = _require_osmnx()
     # 1) Download raw graph for the bounding box [W,S,E,N]
     G_raw = ox.graph_from_bbox([west, south, east, north], network_type="drive", simplify=True)
     # Consolidate close intersections in a projected CRS

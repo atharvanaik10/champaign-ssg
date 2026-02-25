@@ -32,5 +32,4 @@ web/.DS_Store
 .svelte-kit/
 
 # App cache and logs
-cache/
 *.log
