@@ -3,65 +3,46 @@ ALMA Package
 
 Overview
 --------
-- Purpose: Compute and visualize patrol schedules for a Stackelberg Security Game (SSG) on a road network.
+- Purpose: Compute patrol schedules for a Stackelberg Security Game (SSG) on a road network and expose compact, testable building blocks for research.
 - Modules:
   - `config.py`: Typed parameter objects for game and patrol settings.
-  - `data.py`: Graph I/O, schedule loading, utilities for animation prep.
-  - `patrol.py`: Patrol simulation helpers.
+  - `data.py`: Graph I/O (adjacency JSON), helpers for map rendering.
+  - `patrol.py`: Transition matrix + patrol simulation.
   - `ssg.py`: Stackelberg Security Game LP and solver glue.
   - `schedule.py`: High-level orchestration to generate a patrol schedule and summary.
-  - `animation.py`: Matplotlib-based GIF export helpers (legacy/offline).
-  - `visualization.py`: Plotly figure builders for interactive maps.
   - `logging_utils.py`: Minimal logging setup used across modules.
+  - `cli.py`: Simple CLI to export schedules.
 
-Key Concepts
+Graph Format
 ------------
-- Graph: The campus/street network with `lat/lon`, neighbors, and risk metadata loaded from JSON.
-- SSG: An LP that allocates coverage per node under a resource budget K.
-- Patrol: Simulated movement of `num_units` over `time_steps`, starting from a given node index.
+Adjacency-style JSON mapping `node_id -> { lat, lon, risk_factor, neighbors: [id,...] }`. Example snippet:
 
-Usage
------
-The repository includes a Streamlit app (`app.py`) that wraps the package.
+```json
+{
+  "A": { "lat": 40.11, "lon": -88.23, "risk_factor": 1.0, "neighbors": ["B"] },
+  "B": { "lat": 40.12, "lon": -88.22, "risk_factor": 2.1, "neighbors": ["A", "C"] }
+}
+```
 
-Basic programmatic usage:
-
+Programmatic Usage
+------------------
 ```python
 from alma.config import GameParams, PatrolParams
 from alma.schedule import generate_patrol_schedule
-from alma.data import load_graph_for_animation
-from alma.visualization import make_unit_paths, build_route_figure
 
-game = GameParams(alpha=1.0, beta=1.0, gamma=1.0, delta=1.0, resource_budget=10.0)
-patrol = PatrolParams(time_steps=480, num_units=5, start_index=0, random_seed=0)
-
-schedule_df, summary = generate_patrol_schedule("data/uiuc_graph.json", game, patrol)
-nodes, edges = load_graph_for_animation("data/uiuc_graph.json")
-
-# Build interactive Plotly figure for a single timestep
-units = sorted(schedule_df["unit_id"].unique().tolist())
-timesteps = sorted(schedule_df["time_step"].unique().tolist())
-schedule_map = {
-    int(t): dict(zip(sub["unit_id"].astype(int), sub["node_id"]))
-    for t, sub in schedule_df.groupby("time_step")
-}
-unit_paths = make_unit_paths(schedule_df, nodes)
-
-fig = build_route_figure(
-    nodes=nodes,
-    edges=edges,
-    unit_paths=unit_paths,
-    schedule_map=schedule_map,
-    units=units,
-    current_t=int(timesteps[0]),
-    show_trails=True,
-)
-fig.show()
+game = GameParams(alpha=1, beta=1, gamma=1, delta=1, resource_budget=10)
+patrol = PatrolParams(time_steps=120, num_units=5, start_index=0, random_seed=0)
+df, summary = generate_patrol_schedule('data/uiuc_graph.json', game, patrol)
 ```
 
-Development Notes
------------------
-- The Plotly map logic is intentionally factored out into `visualization.py` to keep the app minimal and improve reuse.
-- All public helpers include docstrings and type hints to ease integration and static analysis.
-- The app uses `st.session_state` to persist results across reruns; this avoids blank UI when interacting with widgets like sliders.
+CLI
+---
+```bash
+python -m alma.cli --graph data/uiuc_graph.json --output patrol.csv --time-steps 120 --num-units 5
+```
 
+Research Notes
+--------------
+- Utility design lives in `ssg.py` (`build_payoffs_from_risk`) — the natural hook for experimenting with different objectives, costs, or constraints.
+- Movement policy is separated (`patrol.py`) so you can test alternate transition rules without touching the solver.
+- `schedule.generate_patrol_schedule` accepts a `progress` callback but remains UI-agnostic to keep algorithms testable in isolation.
