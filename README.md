@@ -85,6 +85,57 @@ python -m alma.cli --graph data/uiuc_graph.json --output patrol_schedule.csv --t
 - If you’re iterating on research (utility functions, constraints, budgets), concentrate changes inside `alma/`.
 - The API remains synchronous for simplicity; swap in a background task if you need long runs.
 
+## Setup (Data Prep)
+
+The demo expects a road graph with risk attached from a processed crime log. Run the one‑time setup CLI to build these artifacts.
+
+### Requirements
+
+- Python packages (install on your env):
+  - `pip install osmnx openai python-dotenv`
+- API keys (available as environment variables or in a `.env` file):
+  - `GOOGLE_MAPS_API_KEY`: for geocoding the crime log locations
+  - `OPENAI_API_KEY`: for classifying crime severities (1–5)
+
+### Commands
+
+- Process the raw crime log (writes `data/crime_log_processed_location.csv` and `data/crime_log_processed.csv`):
+
+  ```bash
+  python -m alma.setup process-crime \
+    --input-xlsx "data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx" \
+    --out-base data/crime_log_processed
+  ```
+
+- Build the road graph and risk (writes `data/uiuc_graph.json` and preview images in `assets/`):
+
+  ```bash
+  python -m alma.setup build-graph \
+    --west -88.24442 --south 40.09396 --east -88.21858 --north 40.11668 \
+    --crimes-csv data/crime_log_processed.csv \
+    --out-adjacency data/uiuc_graph.json \
+    --out-image-osmnx assets/uiuc_graph.png \
+    --out-image-simple assets/uiuc_graph_simple.png \
+    --out-image-risk assets/uiuc_graph_risk.png \
+    --tolerance-m 15
+  ```
+
+- Run both steps in sequence:
+
+  ```bash
+  python -m alma.setup all \
+    --input-xlsx "data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx" \
+    --out-base data/crime_log_processed \
+    --west -88.24442 --south 40.09396 --east -88.21858 --north 40.11668 \
+    --out-adjacency data/uiuc_graph.json \
+    --out-image-osmnx assets/uiuc_graph.png \
+    --out-image-simple assets/uiuc_graph_simple.png \
+    --out-image-risk assets/uiuc_graph_risk.png \
+    --tolerance-m 15
+  ```
+
+The CLI is explicit and does not run automatically; use it whenever you need to regenerate inputs. It fails fast if dependencies or API keys are missing so you can fix configuration early.
+
 ### Caching behavior
 
 - The solver/simulation is cached on disk under `cache/` keyed by the graph file content and the parameter values.
