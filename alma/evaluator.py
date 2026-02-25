@@ -20,10 +20,22 @@ def evaluate_schedule(
 ) -> dict[str, float]:
     """Evaluate a concrete schedule by Monte Carlo.
 
-    Builds a mapping of timestep -> set(node_id) from the schedule and simulates
-    crime events occurring with probability p_event at each timestep, located
-    with probability proportional to node risk. Returns mean and std of
-    efficiency = caught_risk / total_risk over runs with >=1 crime.
+    The crime model generates an event at each timestep with probability
+    `p_event`. Event location is drawn with probability proportional to risk.
+    An event is considered prevented iff a patrol unit occupies the node at the
+    same timestep. Efficiency is defined as `caught_risk / total_risk`.
+
+    Args:
+        schedule_df: DataFrame with columns [time_step, unit_id, node_id].
+        node_list: All node IDs (risk/indices are aligned to this list).
+        risk: Risk array aligned to `node_list`.
+        time_steps: Maximum timestep T in the schedule.
+        p_event: Probability a crime occurs at each timestep.
+        num_runs: Number of Monte Carlo runs to average over.
+        seed: Seed for reproducibility.
+
+    Returns:
+        Dict with keys: `efficiency_mean`, `efficiency_std`, `runs`.
     """
     risk = np.array(risk, float)
     if risk.sum() <= 0:
@@ -72,11 +84,21 @@ def generate_uniform_schedule(
     num_units: int,
     seed: int = 0,
 ) -> pd.DataFrame:
-    """Generate a baseline uniform random walk schedule with diverse starts."""
+    """Generate a baseline uniform random walk schedule with diverse starts.
+
+    Args:
+        graph: NetworkX graph.
+        node_list: Node IDs aligned to the transition matrix.
+        time_steps: Simulate from 0..T (inclusive).
+        num_units: Number of patrol units.
+        seed: Seed for reproducible start selection.
+
+    Returns:
+        DataFrame with columns [time_step, unit_id, node_id].
+    """
     matrix = build_uniform_transition_matrix(graph, node_list)
     starts = pick_diverse_start_nodes(graph, node_list, num_units, seed=seed)
     idx = {nid: i for i, nid in enumerate(node_list)}
     start_indices = [idx[n] for n in starts]
     records = simulate_patrol(matrix, node_list, start_idx=start_indices, time_steps=time_steps, num_units=num_units)
     return pd.DataFrame(records, columns=["time_step", "unit_id", "node_id"])
-

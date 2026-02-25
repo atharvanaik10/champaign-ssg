@@ -13,7 +13,17 @@ logger = logging.getLogger(__name__)
 
 
 def load_graph(path: str | Path) -> nx.Graph:
-    """Load a JSON adjacency list into a NetworkX Graph."""
+    """Load a graph from a JSON adjacency list.
+
+    The expected format is a mapping `node_id -> {lat, lon, risk_factor, neighbors}`.
+
+    Args:
+        path: Path to the JSON file.
+
+    Returns:
+        A simple, undirected NetworkX graph with node attributes: `lat`, `lon`,
+        `risk_factor`, and optional `crimes`.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Graph JSON not found: {path}")
@@ -42,6 +52,15 @@ def load_graph(path: str | Path) -> nx.Graph:
 
 
 def get_node_list_and_risk(graph: nx.Graph) -> tuple[list[str], np.ndarray]:
+    """Extract node IDs and per-node risk as a NumPy array.
+
+    Args:
+        graph: NetworkX graph with `risk_factor` stored on nodes.
+
+    Returns:
+        A tuple `(node_list, risk)` where `node_list` is a list of node IDs and
+        `risk` is a float array aligned to `node_list`.
+    """
     node_list = list(graph.nodes())
     risk = np.array(
         [graph.nodes[node_id].get("risk_factor", 0.0) for node_id in node_list],
@@ -52,6 +71,17 @@ def get_node_list_and_risk(graph: nx.Graph) -> tuple[list[str], np.ndarray]:
 
 
 def load_graph_for_animation(path: str | Path) -> tuple[Dict[str, Tuple[float, float]], List[Tuple[Tuple[float, float], Tuple[float, float]]]]:
+    """Load node coordinates and edge segments for lightweight map rendering.
+
+    This avoids bringing NetworkX into callers that only need geometry.
+
+    Args:
+        path: Path to the JSON adjacency graph.
+
+    Returns:
+        nodes: Mapping of node_id -> (lon, lat).
+        edges: List of ((lon1, lat1), (lon2, lat2)) tuples for each edge.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Graph JSON not found: {path}")
@@ -75,6 +105,18 @@ def load_graph_for_animation(path: str | Path) -> tuple[Dict[str, Tuple[float, f
 
 
 def load_patrol_schedule(csv_path: str | Path) -> tuple[list[int], list[int], dict[int, dict[int, str]]]:
+    """Load a patrol schedule CSV and index it for playback.
+
+    The CSV is expected to have columns: `unit_id,time_step,node_id`.
+
+    Args:
+        csv_path: Path to the schedule CSV.
+
+    Returns:
+        units: List of unit IDs present in the schedule.
+        timesteps: Sorted list of timesteps present.
+        by_time: Mapping `t -> {unit_id -> node_id}` for quick lookup.
+    """
     csv_path = Path(csv_path)
     if not csv_path.exists():
         raise FileNotFoundError(f"Patrol schedule not found: {csv_path}")

@@ -9,6 +9,19 @@ logger = logging.getLogger(__name__)
 
 
 def build_payoffs_from_risk(risk: np.ndarray, alpha: float, beta: float, gamma: float, delta: float):
+    """Map per-node risk to defender/attacker payoffs.
+
+    Args:
+        risk: Array of non-negative risk values per node.
+        alpha: Defender reward when covered.
+        beta: Defender loss when uncovered.
+        gamma: Attacker reward when uncovered.
+        delta: Attacker loss when covered.
+
+    Returns:
+        Tuple of four arrays `(R_d, P_d, R_a, P_a)` representing defender/attacker
+        rewards/losses aligned to `risk`.
+    """
     risk = np.array(risk, dtype=float)
     defender_reward = alpha * risk
     defender_loss = -beta * risk
@@ -18,6 +31,24 @@ def build_payoffs_from_risk(risk: np.ndarray, alpha: float, beta: float, gamma: 
 
 
 def solve_ssg(R_d, P_d, R_a, P_a, w, K):
+    """Solve a single-defender Stackelberg Security Game by enumeration.
+
+    For each candidate attacked target, solves a linear program to maximize the
+    defender utility assuming the attacker best-responds. Returns the coverage
+    vector with the best defender utility over all candidates.
+
+    Args:
+        R_d: Defender reward vector when covered.
+        P_d: Defender loss vector when uncovered.
+        R_a: Attacker reward vector when uncovered.
+        P_a: Attacker loss vector when covered.
+        w: Per-node weights (typically ones).
+        K: Resource budget (upper bound on `w @ x`).
+
+    Returns:
+        A tuple `(x, best_utility)` where `x` is the optimal coverage vector in
+        [0,1]^n and `best_utility` is the corresponding defender utility.
+    """
     n = len(R_d)
     R_d = np.array(R_d, float)
     P_d = np.array(P_d, float)

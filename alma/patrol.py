@@ -10,6 +10,19 @@ logger = logging.getLogger(__name__)
 
 
 def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.ndarray) -> np.ndarray:
+    """Build a coverage-biased transition matrix for a random walk.
+
+    For each node, neighbors are weighted by the SSG coverage vector and
+    normalized to produce a row-stochastic matrix.
+
+    Args:
+        graph: NetworkX graph on which to walk.
+        node_list: List of node IDs (defines the matrix indexing).
+        coverage: Array of coverage weights aligned to `node_list`.
+
+    Returns:
+        A `(n, n)` NumPy array where each row sums to ~1.0.
+    """
     idx = {node_id: i for i, node_id in enumerate(node_list)}
     n = len(node_list)
     matrix = np.zeros((n, n))
@@ -34,6 +47,15 @@ def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.
 
 
 def build_uniform_transition_matrix(graph: nx.Graph, node_list: list[str]) -> np.ndarray:
+    """Build a uniform random-walk transition matrix.
+
+    Args:
+        graph: NetworkX graph on which to walk.
+        node_list: List of node IDs (defines the matrix indexing).
+
+    Returns:
+        A `(n, n)` NumPy array with uniform neighbor probabilities per row.
+    """
     idx = {node_id: i for i, node_id in enumerate(node_list)}
     n = len(node_list)
     matrix = np.zeros((n, n))
@@ -60,6 +82,21 @@ def simulate_patrol(
     num_units: int = 1,
     progress: Optional[Callable[[float, str], None]] = None,
 ) -> list[tuple[int, int, str]]:
+    """Simulate a multi-unit patrol as a Markovian random walk.
+
+    Args:
+        matrix: Row-stochastic transition matrix aligned to `node_list`.
+        node_list: List of node IDs.
+        start_idx: Either a single start index shared by all units, or a list
+            of per-unit start indices (length must equal `num_units`).
+        time_steps: Simulate from t=0..T (inclusive) so the output has T+1 rows
+            per unit.
+        num_units: Number of patrol units.
+        progress: Optional callback receiving `(fraction, message)` updates.
+
+    Returns:
+        A list of `(time_step, unit_id, node_id)` tuples sorted by time then unit.
+    """
     n = len(node_list)
     if isinstance(start_idx, (list, tuple, np.ndarray)):
         if len(start_idx) != num_units:
@@ -82,6 +119,20 @@ def simulate_patrol(
 
 
 def pick_diverse_start_nodes(graph: nx.Graph, node_list: list[str], k: int, seed: int = 0) -> list[str]:
+    """Pick far-apart starting nodes using greedy farthest sampling.
+
+    The first node is chosen uniformly at random. Each subsequent node is the
+    one with the largest shortest-path distance to the already chosen set.
+
+    Args:
+        graph: NetworkX graph.
+        node_list: Node IDs (search domain).
+        k: Number of starts to return.
+        seed: Python PRNG seed for the initial choice and tie-breaking.
+
+    Returns:
+        A list of `k` node IDs (subset of `node_list`).
+    """
     import random
 
     rng = random.Random(seed)

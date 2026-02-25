@@ -26,12 +26,23 @@ def generate_patrol_schedule(
     patrol_params: PatrolParams,
     progress: Optional[Callable[[float, str], None]] = None,
 ) -> tuple[pd.DataFrame, dict[str, float]]:
-    """Generate a patrol schedule and return the schedule plus summary stats.
+    """Generate a patrol schedule and summary statistics.
 
-    Optionally, callers may pass a `progress` keyword-only callback when calling
-    this function to receive updates as `(fraction: float, message: str)`. This
-    keeps the package UI-agnostic while allowing Streamlit or CLIs to surface
-    progress to users.
+    This function loads the graph, solves the SSG to produce a per-node coverage
+    vector, builds a coverage-biased transition matrix, and simulates a
+    multi‑unit patrol for `time_steps` timesteps. When multiple units are used,
+    diverse starting nodes are chosen to spread coverage.
+
+    Args:
+        graph_path: Path to the JSON adjacency graph.
+        game_params: SSG parameters (alpha/beta/gamma/delta, budget).
+        patrol_params: Patrol simulation parameters (T, units, seed, start).
+        progress: Optional callback receiving `(fraction, message)` updates.
+
+    Returns:
+        (schedule_df, summary) where:
+          - schedule_df: DataFrame with columns [time_step, unit_id, node_id].
+          - summary: Dict of scalar metrics (utility, num nodes/edges, params).
     """
     np.random.seed(patrol_params.random_seed)
 
@@ -99,6 +110,19 @@ def generate_patrol_schedule(
 
 
 def _cache_key_for_inputs(graph_path: str | Path, game_params: GameParams, patrol_params: PatrolParams) -> str:
+    """Compute a stable content-based cache key for inputs.
+
+    Hashes the graph file bytes, the serialized parameter dicts, and a version
+    token to produce a short hex key suitable for filenames.
+
+    Args:
+        graph_path: Path to graph JSON.
+        game_params: Game parameter object.
+        patrol_params: Patrol parameter object.
+
+    Returns:
+        A short hex string suitable for cache filenames.
+    """
     """Compute a stable cache key from graph content and parameters."""
     path = Path(graph_path)
     h = hashlib.sha256()
@@ -130,6 +154,17 @@ def generate_patrol_schedule_cached(
     Caches by hashing the graph file contents and the parameter values. If a
     matching result is found, loads the cached CSV/JSON and returns immediately.
     Otherwise, computes and stores the result for future runs.
+
+    Args:
+        graph_path: Path to the JSON adjacency graph.
+        game_params: SSG parameters.
+        patrol_params: Patrol simulation parameters.
+        cache_dir: Directory to store CSV/JSON cache files.
+        use_cache: Whether to read/write the cache.
+        progress: Optional callback receiving `(fraction, message)` updates.
+
+    Returns:
+        (schedule_df, summary) as described in `generate_patrol_schedule`.
     """
     def report(frac: float, msg: str):
         if progress is not None:
