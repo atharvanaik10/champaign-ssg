@@ -534,7 +534,7 @@
               <div class="rounded-lg border bg-white p-3 text-center shadow-sm">
                 <div class="flex items-center justify-center gap-2 text-xs text-slate-500">
                   <span>Nodes</span>
-                  <Info text="Number of nodes in the road graph." />
+                  <Info text="Number of nodes (intersections) in the road graph." />
                 </div>
                 <div class="text-lg font-semibold">{fmt(summary.nodes)}</div>
               </div>

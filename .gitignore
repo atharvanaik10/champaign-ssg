@@ -1,5 +1,36 @@
-venv
-__pycache__
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+build/
+dist/
+.mypy_cache/
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Environments
 .env
-.venv
+.env.*
+.venv/
+venv/
+
+# OS
 .DS_Store
+
+# Editors/IDE
+.idea/
+.vscode/
+
+# Node/Web
+web/node_modules/
+web/dist/
+web/.vite/
+web/.DS_Store
+.svelte-kit/
+
+# App cache and logs
+cache/
+*.log

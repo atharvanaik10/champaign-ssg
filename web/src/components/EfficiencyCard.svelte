@@ -14,7 +14,7 @@
     <div class="rounded-lg border bg-white p-3 text-center shadow-sm">
       <div class="flex items-center justify-center gap-2 text-xs text-slate-500">
         <span>Efficiency (SSG)</span>
-        <Info text="Mean fraction of risk prevented by the SSG schedule across Monte Carlo runs." />
+        <Info text="Mean fraction of risk prevented by the SSG schedule across runs." />
       </div>
       <div class="text-lg font-semibold">{fmt(summary?.efficiency_ssg_mean)}</div>
     </div>
