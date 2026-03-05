@@ -1,23 +1,142 @@
-# ALMA: Active Law-enforcement Mixed-strategy Allocator
+# ALMA: Active Law‑enforcement Mixed‑strategy Allocator
 
-Risk-aware patrol planning for the UIUC/Champaign area using Stackelberg Security Games.
+Risk‑aware patrol planning for the UIUC/Champaign area using Stackelberg Security Games (SSG).
 
-## Overview
+This repository is intentionally simple: a small, well‑documented Python library (`alma/`), a tiny FastAPI server (`server.py`), and a minimal Svelte+Tailwind UI in `web/`.
 
-This project builds a campus-scale road graph from OpenStreetMap, maps historical crime reports onto that graph to estimate per-node risk, solves a Stackelberg Security Game (SSG) to allocate patrol attention, and then generates and animates concrete patrol routes derived from the optimal coverage distribution.
+## Project Layout
 
-## Features
+- `alma/`: Core compute library (graph I/O, SSG solve, patrol simulation).
+- `server.py`: Minimal FastAPI with two endpoints: `/plan` and `/graph`. Also serves static files from `web/dist` after a build.
+- Caching: Repeated runs with the same inputs are loaded from `cache/` automatically (see below).
+- `web/`: Minimal Svelte + Tailwind app (single page) that calls the API and renders a MapLibre map and schedule.
+- `data/`: Sample graph JSON (`uiuc_graph.json`).
 
--   Data ingestion: Parses the UIUC Clery Crime Log (Excel), geocodes locations (Google Maps API), and assigns a severity score (1–5) to each incident using a lightweight classifier (gpt-5-nano) with basic caching.
--   Graph building: Downloads and simplifies an OSM road network for the campus area (OSMnx), consolidates intersections, and exports a JSON adjacency list with per-node lat/lon and risk.
--   Risk modeling: Attaches incidents to the nearest road node and computes a `risk_factor` per node that scales with incident severity and frequency.
--   Game-theoretic allocation: Formulates and solves a single-defender SSG with a resource budget (CVXPy) to produce optimal coverage probabilities over nodes.
--   Patrol synthesis: Converts coverage into a biased Markov policy on the graph and simulates multi-unit random-walk patrols; exports a patrol schedule CSV.
--   Evaluation: Monte Carlo crime-event simulation to estimate patrol efficiency; optional comparison to a uniform random-walk baseline and plotting utilities.
--   Visualization: Static plots of the road graph and risk heat; animated GIF showing patrol units moving over time on the network.
--   Lightweight graph library: A minimal undirected, weighted graph class for prototyping risk-aware structures and serialization.
+Removed legacy scaffolding (complex backend, SvelteKit app, Streamlit scripts) to keep the POC easy to read and extend.
+
+## Quick Start
+
+### Python setup
+
+```bash
+python -m venv .venv && source .venv/bin/activate  # optional
+pip install -r requirements.txt
+```
+
+### Start the API
+
+```bash
+uvicorn server:app --reload
+```
+
+API will run on `http://localhost:8000`.
+
+### Web UI (optional)
+
+```bash
+cd web
+npm install
+npm run build           # outputs to web/dist
+cd ..
+uvicorn server:app --reload   # serves web/dist at /
+```
+
+Open `http://localhost:8000` and click Start to generate a schedule.
+
+## API
+
+- `POST /plan?format=json|csv` — Run a plan (synchronous) and return the schedule.
+  - Body: `{ graph_path, game: {alpha,beta,gamma,delta,resource_budget}, patrol: {time_steps, num_units, start_index, random_seed} }`
+  - Returns JSON `{ summary, schedule }` or CSV when `format=csv`.
+
+- `GET /graph?graph_path=...` — Graph as GeoJSON FeatureCollection for the map.
+
+## Library (`alma/`)
+
+Key modules:
+- `config.py`: Typed parameter objects (`GameParams`, `PatrolParams`).
+- `data.py`: Graph I/O and helpers for animation/visualization.
+- `ssg.py`: Stackelberg Security Game solver (CVXPY/ECOS/OSQP).
+- `patrol.py`: Transition matrix and patrol simulation.
+- `schedule.py`: High‑level orchestration that wires everything.
+- `cli.py`: Simple CLI to export schedules as CSV.
+
+Example usage:
+
+```python
+from alma.config import GameParams, PatrolParams
+from alma.schedule import generate_patrol_schedule
+
+game = GameParams(alpha=1, beta=1, gamma=1, delta=1, resource_budget=10)
+patrol = PatrolParams(time_steps=120, num_units=5, start_index=0, random_seed=0)
+df, summary = generate_patrol_schedule('data/uiuc_graph.json', game, patrol)
+print(df.head(), summary)
+```
+
+CLI:
+
+```bash
+python -m alma.cli --graph data/uiuc_graph.json --output patrol_schedule.csv --time-steps 120 --num-units 5
+```
 
 ## Notes
 
--   External services: Uses Google Maps Geocoding API and the OpenAI API for severity classification (both optional with caching/heuristics).
--   Scope: Bounding box and parameters are tuned for UIUC/Champaign but are configurable for other regions or data sources.
+- The UI is intentionally lean: one page, simple form, MapLibre for context, and a compact table.
+- If you’re iterating on research (utility functions, constraints, budgets), concentrate changes inside `alma/`.
+- The API remains synchronous for simplicity; swap in a background task if you need long runs.
+
+## Setup (Data Prep)
+
+The demo expects a road graph with risk attached from a processed crime log. Run the one‑time setup CLI to build these artifacts.
+
+### Requirements
+
+- Python packages (install on your env):
+  - `pip install osmnx openai python-dotenv`
+- API keys (available as environment variables or in a `.env` file):
+  - `GOOGLE_MAPS_API_KEY`: for geocoding the crime log locations
+  - `OPENAI_API_KEY`: for classifying crime severities (1–5)
+
+### Commands
+
+- Process the raw crime log (writes `data/crime_log_processed_location.csv` and `data/crime_log_processed.csv`):
+
+  ```bash
+  python -m alma.setup process-crime \
+    --input-xlsx "data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx" \
+    --out-base data/crime_log_processed
+  ```
+
+- Build the road graph and risk (writes `data/uiuc_graph.json` and preview images in `assets/`):
+
+  ```bash
+  python -m alma.setup build-graph \
+    --west -88.24442 --south 40.09396 --east -88.21858 --north 40.11668 \
+    --crimes-csv data/crime_log_processed.csv \
+    --out-adjacency data/uiuc_graph.json \
+    --out-image-osmnx assets/uiuc_graph.png \
+    --out-image-simple assets/uiuc_graph_simple.png \
+    --out-image-risk assets/uiuc_graph_risk.png \
+    --tolerance-m 15
+  ```
+
+- Run both steps in sequence:
+
+  ```bash
+  python -m alma.setup all \
+    --input-xlsx "data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx" \
+    --out-base data/crime_log_processed \
+    --west -88.24442 --south 40.09396 --east -88.21858 --north 40.11668 \
+    --out-adjacency data/uiuc_graph.json \
+    --out-image-osmnx assets/uiuc_graph.png \
+    --out-image-simple assets/uiuc_graph_simple.png \
+    --out-image-risk assets/uiuc_graph_risk.png \
+    --tolerance-m 15
+  ```
+
+The CLI is explicit and does not run automatically; use it whenever you need to regenerate inputs. It fails fast if dependencies or API keys are missing so you can fix configuration early.
+
+### Caching behavior
+
+- The solver/simulation is cached on disk under `cache/` keyed by the graph file content and the parameter values.
+- Cache is automatic via `generate_patrol_schedule_cached(...)`. To clear cache, delete files in `cache/`.

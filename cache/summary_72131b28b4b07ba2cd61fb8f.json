@@ -1,0 +1,1 @@
+{"best_defender_utility": -17.461462339348984, "nodes": 237.0, "edges": 376.0, "game_alpha": 1.0, "game_beta": 1.0, "game_gamma": 1.0, "game_delta": 1.0, "game_resource_budget": 10.0, "patrol_time_steps": 120.0, "patrol_num_units": 4.0, "patrol_start_index": 0.0, "patrol_random_seed": 0.0}
