@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 from alma import GameParams, PatrolParams
 from alma.schedule import generate_patrol_schedule_cached
 from alma.data import load_graph_for_animation, load_graph, get_node_list_and_risk
-from alma.evaluator import evaluate_schedule, generate_uniform_schedule
+from alma.evaluator import evaluate_schedule, generate_uniform_schedule, compute_schedule_metrics
 import asyncio
 import json
 import logging
@@ -96,6 +96,8 @@ def create_plan(payload: PlanRequest, format: Literal["json", "csv"] = Query("js
         num_runs=payload.eval.num_runs,
         seed=patrol.random_seed,
     )
+    # Deterministic schedule metrics (SSG)
+    det_ssg = compute_schedule_metrics(df, node_list)
     df_uniform = generate_uniform_schedule(
         graph,
         node_list,
@@ -112,6 +114,7 @@ def create_plan(payload: PlanRequest, format: Literal["json", "csv"] = Query("js
         num_runs=payload.eval.num_runs,
         seed=patrol.random_seed,
     )
+    det_uni = compute_schedule_metrics(df_uniform, node_list)
     # Efficiency vs units sweep (small caps for runtime)
     sweep_max = min(6, max(1, patrol.num_units))
     units_list = list(range(1, sweep_max + 1))
@@ -162,6 +165,22 @@ def create_plan(payload: PlanRequest, format: Literal["json", "csv"] = Query("js
         "eff_by_units_units": units_list,
         "eff_by_units_ssg": ssg_means,
         "eff_by_units_uniform": uni_means,
+        # Movement/Coverage (SSG)
+        "movement_ssg_total_hops": det_ssg["movement_total_hops"],
+        "movement_ssg_by_unit_hops": det_ssg["movement_by_unit_hops"],
+        "coverage_ssg_total_ratio": det_ssg["coverage_total_ratio"],
+        "coverage_ssg_total_count": det_ssg["coverage_total_count"],
+        "coverage_ssg_total_nodes": det_ssg["coverage_total_nodes"],
+        "coverage_ssg_by_unit_ratio": det_ssg["coverage_by_unit_ratio"],
+        "coverage_ssg_by_unit_count": det_ssg["coverage_by_unit_count"],
+        # Movement/Coverage (Uniform)
+        "movement_uniform_total_hops": det_uni["movement_total_hops"],
+        "movement_uniform_by_unit_hops": det_uni["movement_by_unit_hops"],
+        "coverage_uniform_total_ratio": det_uni["coverage_total_ratio"],
+        "coverage_uniform_total_count": det_uni["coverage_total_count"],
+        "coverage_uniform_total_nodes": det_uni["coverage_total_nodes"],
+        "coverage_uniform_by_unit_ratio": det_uni["coverage_by_unit_ratio"],
+        "coverage_uniform_by_unit_count": det_uni["coverage_by_unit_count"],
     })
 
     if format == "csv":
@@ -308,6 +327,7 @@ class Jobs:
                 num_runs=p.eval.num_runs,
                 seed=patrol.random_seed,
             )
+            det_ssg = compute_schedule_metrics(df, node_list)
             with self._cond:
                 curr = self._jobs[job_id]
                 self._publish(curr, 0.92, "Evaluating baseline...")
@@ -327,6 +347,7 @@ class Jobs:
                 num_runs=p.eval.num_runs,
                 seed=patrol.random_seed,
             )
+            det_uni = compute_schedule_metrics(df_uniform, node_list)
             # Sweep
             sweep_max = min(6, max(1, patrol.num_units))
             units_list = list(range(1, sweep_max + 1))
@@ -383,6 +404,22 @@ class Jobs:
                     "eff_by_units_units": units_list,
                     "eff_by_units_ssg": ssg_means,
                     "eff_by_units_uniform": uni_means,
+                    # Movement/Coverage (SSG)
+                    "movement_ssg_total_hops": det_ssg["movement_total_hops"],
+                    "movement_ssg_by_unit_hops": det_ssg["movement_by_unit_hops"],
+                    "coverage_ssg_total_ratio": det_ssg["coverage_total_ratio"],
+                    "coverage_ssg_total_count": det_ssg["coverage_total_count"],
+                    "coverage_ssg_total_nodes": det_ssg["coverage_total_nodes"],
+                    "coverage_ssg_by_unit_ratio": det_ssg["coverage_by_unit_ratio"],
+                    "coverage_ssg_by_unit_count": det_ssg["coverage_by_unit_count"],
+                    # Movement/Coverage (Uniform)
+                    "movement_uniform_total_hops": det_uni["movement_total_hops"],
+                    "movement_uniform_by_unit_hops": det_uni["movement_by_unit_hops"],
+                    "coverage_uniform_total_ratio": det_uni["coverage_total_ratio"],
+                    "coverage_uniform_total_count": det_uni["coverage_total_count"],
+                    "coverage_uniform_total_nodes": det_uni["coverage_total_nodes"],
+                    "coverage_uniform_by_unit_ratio": det_uni["coverage_by_unit_ratio"],
+                    "coverage_uniform_by_unit_count": det_uni["coverage_by_unit_count"],
                 })
                 curr.summary = summary
                 curr.schedule_json = schedule_json
