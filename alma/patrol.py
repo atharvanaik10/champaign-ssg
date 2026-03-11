@@ -3,13 +3,15 @@ from __future__ import annotations
 import logging
 from typing import Callable, Iterable, Optional, Sequence
 
-import numpy as np
 import networkx as nx
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
 
-def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.ndarray) -> np.ndarray:
+def build_transition_matrix(
+    graph: nx.Graph, node_list: list[str], coverage: np.ndarray
+) -> np.ndarray:
     """Build a coverage-biased transition matrix for a random walk.
 
     For each node, neighbors are weighted by the SSG coverage vector and
@@ -23,6 +25,8 @@ def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.
     Returns:
         A `(n, n)` NumPy array where each row sums to ~1.0.
     """
+    alpha = 0.5
+    epsilon = 0.15
     idx = {node_id: i for i, node_id in enumerate(node_list)}
     n = len(node_list)
     matrix = np.zeros((n, n))
@@ -36,6 +40,7 @@ def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.
         weights = np.array([coverage[idx[v]] for v in neighbors], dtype=float)
         if weights.sum() <= 0:
             weights = np.ones_like(weights)
+        weights = weights**alpha + epsilon
         weights /= weights.sum()
 
         for w_i, neighbor in enumerate(neighbors):
@@ -46,7 +51,9 @@ def build_transition_matrix(graph: nx.Graph, node_list: list[str], coverage: np.
     return matrix
 
 
-def build_uniform_transition_matrix(graph: nx.Graph, node_list: list[str]) -> np.ndarray:
+def build_uniform_transition_matrix(
+    graph: nx.Graph, node_list: list[str]
+) -> np.ndarray:
     """Build a uniform random-walk transition matrix.
 
     Args:
@@ -114,11 +121,15 @@ def simulate_patrol(
             for unit in range(num_units):
                 current[unit] = int(np.random.choice(n, p=matrix[current[unit]]))
         if progress is not None and (t % update_every == 0 or t == time_steps):
-            progress(t / float(time_steps if time_steps > 0 else 1), "Simulating patrol...")
+            progress(
+                t / float(time_steps if time_steps > 0 else 1), "Simulating patrol..."
+            )
     return records
 
 
-def pick_diverse_start_nodes(graph: nx.Graph, node_list: list[str], k: int, seed: int = 0) -> list[str]:
+def pick_diverse_start_nodes(
+    graph: nx.Graph, node_list: list[str], k: int, seed: int = 0
+) -> list[str]:
     """Pick far-apart starting nodes using greedy farthest sampling.
 
     The first node is chosen uniformly at random. Each subsequent node is the
