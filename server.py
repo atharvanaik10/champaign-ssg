@@ -210,6 +210,23 @@ def get_graph(graph_path: str = Query(..., min_length=1)) -> JSONResponse:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     features: list[dict[str, Any]] = []
+    # Attempt to load address metadata for nodes if present in the graph JSON
+    address_map: dict[str, Any] = {}
+    try:
+        import json
+        from pathlib import Path
+
+        p = Path(graph_path)
+        if p.exists():
+            with p.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            # data is expected to be mapping node_id -> attrs (may include 'address')
+            for nid, attrs in data.items():
+                if isinstance(attrs, dict) and "address" in attrs:
+                    address_map[str(nid)] = attrs.get("address")
+    except Exception:
+        # If anything goes wrong, just continue without addresses
+        address_map = {}
     for idx, edge in enumerate(edges):
         p1, p2 = edge
         features.append(
@@ -227,7 +244,7 @@ def get_graph(graph_path: str = Query(..., min_length=1)) -> JSONResponse:
         features.append(
             {
                 "type": "Feature",
-                "properties": {"node_id": node_id},
+                "properties": {"node_id": node_id, "address": address_map.get(str(node_id))},
                 "geometry": {"type": "Point", "coordinates": [coords[0], coords[1]]},
             }
         )

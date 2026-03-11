@@ -149,6 +149,21 @@
     return m
   }
 
+  function nodeAddressLookup() {
+    const m = new Map()
+    for (const f of (geo && geo.features) || []) {
+      if (
+        f.geometry.type === 'Point' &&
+        f.properties &&
+        typeof f.properties.node_id === 'string'
+      ) {
+        const addr = f.properties.address
+        if (addr != null) m.set(String(f.properties.node_id), String(addr))
+      }
+    }
+    return m
+  }
+
   function draw() {
     if (!map) return
     const byNode = nodeLookup()
@@ -256,10 +271,14 @@
 
   $: displayRows = (() => {
     const nodes = nodeLookup()
+    const addresses = nodeAddressLookup()
     return filteredSchedule.map((r) => {
-      const coords = nodes.get(String(r.node_id))
-      const addr = coords ? `${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}` : ''
-      return { ...r, address: addr }
+      const id = String(r.node_id)
+      const fromAddr = addresses.get(id)
+      if (fromAddr) return { ...r, address: fromAddr }
+      const coords = nodes.get(id)
+      const fallback = coords ? `${coords[1].toFixed(6)}, ${coords[0].toFixed(6)}` : ''
+      return { ...r, address: fallback }
     })
   })()
 

@@ -43,9 +43,8 @@ DAMPENING_FACTOR = 0.5
 # Global configuration (edit these values to control behavior)
 # ---------------------------------------------------------------------------
 # Build-graph settings: bounding box for UIUC/Champaign area and I/O paths.
-# - These replace the previous CLI flags like --west/--north/etc.
 WEST = -88.24442
-SOUTH = 40.09396
+SOUTH = 40.08267
 EAST = -88.21858
 NORTH = 40.11668
 CRIMES_CSV = "data/crime_log_processed.csv"
