@@ -1,31 +1,26 @@
 from __future__ import annotations
 
-"""ALMA setup CLI: build the road graph and process the crime log.
+"""ALMA setup tool: build the road graph and process the crime log.
 
-This module merges the legacy one-off scripts into a single command-line tool
-that you run explicitly (it never runs on import). It prepares the required
-data artifacts for the UIUC/Champaign demo: a cleaned/collapsed road graph with
-per-node risk derived from the processed crime log.
+This module prepares the required data artifacts for the UIUC/Champaign demo:
+1) a cleaned/collapsed road graph with per-node risk derived from the processed
+   crime log, and 2) geocoded crime CSVs with severity scores.
+
+Important: configuration is controlled via module-level constants below. We no
+longer accept CLI arguments for these settings. Adjust the values at the top of
+this file and run the module, e.g. `python -m alma.setup`.
 
 Dependencies (required)
 -----------------------
 - OSMnx: downloads and simplifies the road network.
-- Google Maps Geocoding API: converts crime addresses to lat/lon
-  (requires `GOOGLE_MAPS_API_KEY`).
+- Google Maps Geocoding API: converts crime addresses to lat/lon and performs
+  reverse geocoding for node addresses (requires `GOOGLE_MAPS_API_KEY`).
 - OpenAI API: classifies crime descriptions into severities 1–5
   (requires `OPENAI_API_KEY`).
-
-Subcommands
------------
-- build-graph: Download/construct the road graph via OSMnx, attach crime risk
-  from a processed CSV, and export adjacency JSON + preview images.
-- process-crime: Process the raw crime log into geocoded/severity-scored CSVs.
-- all: Run both steps (process-crime then build-graph).
 
 This tool fails fast if required dependencies or API keys are missing.
 """
 
-import argparse
 import json
 import math
 import os
@@ -43,6 +38,37 @@ from openai import OpenAI
 # ---------------------------- Graph construction ----------------------------
 
 DAMPENING_FACTOR = 0.5
+
+# ---------------------------------------------------------------------------
+# Global configuration (edit these values to control behavior)
+# ---------------------------------------------------------------------------
+# Build-graph settings: bounding box for UIUC/Champaign area and I/O paths.
+# - These replace the previous CLI flags like --west/--north/etc.
+WEST = -88.24442
+SOUTH = 40.09396
+EAST = -88.21858
+NORTH = 40.11668
+CRIMES_CSV = "data/crime_log_processed.csv"
+OUT_ADJACENCY = "data/uiuc_graph.json"
+OUT_IMAGE_OSMNX = "assets/uiuc_graph.png"
+OUT_IMAGE_SIMPLE = "assets/uiuc_graph_simple.png"
+OUT_IMAGE_RISK = "assets/uiuc_graph_risk.png"
+CONSOLIDATE_TOLERANCE_M = 15.0
+
+# Reverse geocoding behavior for graph nodes.
+# - Addresses are attached to each node via Google Maps Reverse Geocoding.
+# - Results are cached to avoid redundant API calls across runs.
+REVERSE_GEOCODE_CACHE = Path("cache/reverse_geocode_cache.json")
+
+# Crime processing configuration (forward geocode + severity classification).
+CRIME_INPUT_XLSX = "data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx"
+CRIME_OUT_BASE = "data/crime_log_processed"
+CRIME_ADDRESS_COLUMN = "Location"
+OPENAI_MODEL = "gpt-5-nano"
+
+# Which action to run when executing this module directly.
+# Choose one of: "build-graph", "process-crime", or "all".
+RUN_MODE = "build-graph"
 
 
 def to_simple_graph(G_multi) -> nx.Graph:
@@ -205,6 +231,7 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
         entry = {
             "lat": data.get("lat"),
             "lon": data.get("lon"),
+            "address": data.get("address"),
             "risk_factor": data.get("risk_factor", 1.0),
             "neighbors": [str(v) for v in G.neighbors(n)],
         }
@@ -213,6 +240,63 @@ def save_adjacency_json(G: nx.Graph, out_path: str) -> str:
         adj[str(n)] = entry
     Path(out_path).write_text(json.dumps(adj, ensure_ascii=False, indent=2), encoding="utf-8")
     return out_path
+
+
+def attach_addresses_to_graph(G: nx.Graph) -> None:
+    """Reverse geocode each node's lat/lon to a human-readable address.
+
+    Uses Google Maps Geocoding API with the `latlng` parameter. Mimics the
+    forward geocoding approach used in `process_crime_log` but for reverse
+    geocoding. Results are cached between runs to limit API usage.
+    """
+    import urllib.parse
+    import urllib.request
+
+    _maybe_load_dotenv()
+    key = os.getenv("GOOGLE_MAPS_API_KEY")
+    if not key:
+        raise RuntimeError("GOOGLE_MAPS_API_KEY not set in environment")
+
+    # Load and prepare cache
+    cache: dict[str, str] = {}
+    try:
+        if REVERSE_GEOCODE_CACHE.exists():
+            cache = json.loads(REVERSE_GEOCODE_CACHE.read_text(encoding="utf-8"))
+    except Exception:
+        cache = {}
+
+    base_url = "https://maps.googleapis.com/maps/api/geocode/json"
+
+    def key_for(lat: float, lon: float) -> str:
+        return f"{lat:.6f},{lon:.6f}"
+
+    updated = False
+    for n, data in G.nodes(data=True):
+        lat = float(data.get("lat"))
+        lon = float(data.get("lon"))
+        cache_key = key_for(lat, lon)
+        if cache_key in cache:
+            G.nodes[n]["address"] = cache[cache_key]
+            continue
+        params = {"latlng": f"{lat},{lon}", "key": key}
+        url = f"{base_url}?{urllib.parse.urlencode(params)}"
+        with urllib.request.urlopen(url) as resp:  # noqa: S310
+            payload = json.loads(resp.read().decode("utf-8"))
+        status = payload.get("status")
+        if status != "OK":
+            raise RuntimeError(
+                f"Reverse geocoding failed ({status}): {payload.get('error_message','')}"
+            )
+        formatted = payload["results"][0].get("formatted_address")
+        G.nodes[n]["address"] = formatted
+        cache[cache_key] = formatted
+        updated = True
+
+    if updated:
+        REVERSE_GEOCODE_CACHE.parent.mkdir(parents=True, exist_ok=True)
+        REVERSE_GEOCODE_CACHE.write_text(
+            json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
 
 
 def build_graph(
@@ -249,8 +333,9 @@ def build_graph(
     plot_graph_osmnx(G_consolidated, str(out_image_osmnx))
     plot_simple_graph(G, str(out_image_simple))
 
-    # 4) Attach crimes, export adjacency
+    # 4) Attach crimes and reverse-geocoded addresses, then export adjacency
     attach_crimes_to_graph(G, str(crimes_csv))
+    attach_addresses_to_graph(G)
     Path(out_adjacency).parent.mkdir(parents=True, exist_ok=True)
     save_adjacency_json(G, str(out_adjacency))
 
@@ -405,99 +490,53 @@ def process_crime_log(
     cache_path.write_text(json.dumps(sev_cache, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-# ----------------------------------- CLI ------------------------------------
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse CLI arguments for the one-time setup tool.
-
-    Returns:
-        argparse.Namespace with `cmd` indicating the subcommand and its flags.
-    """
-    p = argparse.ArgumentParser(description="ALMA one-time setup tools")
-    sub = p.add_subparsers(dest="cmd", required=True)
-
-    g = sub.add_parser("build-graph", help="Build UIUC road graph and exports")
-    g.add_argument("--west", type=float, default=-88.24442)
-    g.add_argument("--south", type=float, default=40.09396)
-    g.add_argument("--east", type=float, default=-88.21858)
-    g.add_argument("--north", type=float, default=40.11668)
-    g.add_argument("--crimes-csv", default="data/crime_log_processed.csv")
-    g.add_argument("--out-adjacency", default="data/uiuc_graph.json")
-    g.add_argument("--out-image-osmnx", default="assets/uiuc_graph.png")
-    g.add_argument("--out-image-simple", default="assets/uiuc_graph_simple.png")
-    g.add_argument("--out-image-risk", default="assets/uiuc_graph_risk.png")
-    g.add_argument("--tolerance-m", type=float, default=15.0)
-
-    c = sub.add_parser("process-crime", help="Process crime log: geocode + severity")
-    c.add_argument("--input-xlsx", default="data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx")
-    c.add_argument("--out-base", default="data/crime_log_processed")
-    c.add_argument("--address-column", default="Location")
-    c.add_argument("--openai-model", default="gpt-5-nano")
-
-    a = sub.add_parser("all", help="Run both steps: process-crime then build-graph")
-    a.add_argument("--input-xlsx", default="data/Clery Crime Log - Police Contacts Only - 2021-October 31 2025.xlsx")
-    a.add_argument("--out-base", default="data/crime_log_processed")
-    a.add_argument("--address-column", default="Location")
-    a.add_argument("--openai-model", default="gpt-5-nano")
-    a.add_argument("--west", type=float, default=-88.24442)
-    a.add_argument("--south", type=float, default=40.09396)
-    a.add_argument("--east", type=float, default=-88.21858)
-    a.add_argument("--north", type=float, default=40.11668)
-    a.add_argument("--out-adjacency", default="data/uiuc_graph.json")
-    a.add_argument("--out-image-osmnx", default="assets/uiuc_graph.png")
-    a.add_argument("--out-image-simple", default="assets/uiuc_graph_simple.png")
-    a.add_argument("--out-image-risk", default="assets/uiuc_graph_risk.png")
-    a.add_argument("--tolerance-m", type=float, default=15.0)
-
-    return p.parse_args()
-
-
 def main() -> None:
-    """Entry point for `python -m alma.setup`.
+    """Entry point for `python -m alma.setup` using global config.
 
-    Dispatches to the selected subcommand. Exits with exceptions on missing
-    dependencies or API keys to make failures visible during setup.
+    Set `RUN_MODE` at the top of this file to control which action runs.
     """
-    args = parse_args()
-    if args.cmd == "build-graph":
+    if RUN_MODE == "build-graph":
         build_graph(
-            args.west,
-            args.south,
-            args.east,
-            args.north,
-            args.crimes_csv,
-            out_adjacency=args.out_adjacency,
-            out_image_osmnx=args.out_image_osmnx,
-            out_image_simple=args.out_image_simple,
-            out_image_risk=args.out_image_risk,
-            consolidate_tolerance_m=args.tolerance_m,
+            WEST,
+            SOUTH,
+            EAST,
+            NORTH,
+            CRIMES_CSV,
+            out_adjacency=OUT_ADJACENCY,
+            out_image_osmnx=OUT_IMAGE_OSMNX,
+            out_image_simple=OUT_IMAGE_SIMPLE,
+            out_image_risk=OUT_IMAGE_RISK,
+            consolidate_tolerance_m=CONSOLIDATE_TOLERANCE_M,
         )
-    elif args.cmd == "process-crime":
+    elif RUN_MODE == "process-crime":
         process_crime_log(
-            input_xlsx=args.input_xlsx,
-            out_csv_base=args.out_base,
-            address_column=args.address_column,
-            openai_model=args.openai_model,
+            input_xlsx=CRIME_INPUT_XLSX,
+            out_csv_base=CRIME_OUT_BASE,
+            address_column=CRIME_ADDRESS_COLUMN,
+            openai_model=OPENAI_MODEL,
         )
-    elif args.cmd == "all":
+    elif RUN_MODE == "all":
         process_crime_log(
-            input_xlsx=args.input_xlsx,
-            out_csv_base=args.out_base,
-            address_column=args.address_column,
-            openai_model=args.openai_model,
+            input_xlsx=CRIME_INPUT_XLSX,
+            out_csv_base=CRIME_OUT_BASE,
+            address_column=CRIME_ADDRESS_COLUMN,
+            openai_model=OPENAI_MODEL,
         )
         build_graph(
-            args.west,
-            args.south,
-            args.east,
-            args.north,
-            crimes_csv=f"{args.out_base}.csv",
-            out_adjacency=args.out_adjacency,
-            out_image_osmnx=args.out_image_osmnx,
-            out_image_simple=args.out_image_simple,
-            out_image_risk=args.out_image_risk,
-            consolidate_tolerance_m=args.tolerance_m,
+            WEST,
+            SOUTH,
+            EAST,
+            NORTH,
+            crimes_csv=f"{CRIME_OUT_BASE}.csv",
+            out_adjacency=OUT_ADJACENCY,
+            out_image_osmnx=OUT_IMAGE_OSMNX,
+            out_image_simple=OUT_IMAGE_SIMPLE,
+            out_image_risk=OUT_IMAGE_RISK,
+            consolidate_tolerance_m=CONSOLIDATE_TOLERANCE_M,
+        )
+    else:
+        raise SystemExit(
+            "Invalid RUN_MODE. Use one of: 'build-graph', 'process-crime', 'all'."
         )
 
 

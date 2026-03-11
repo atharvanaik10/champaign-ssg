@@ -9,6 +9,82 @@ import pandas as pd
 from alma.patrol import build_uniform_transition_matrix, simulate_patrol, pick_diverse_start_nodes
 
 
+def compute_schedule_metrics(
+    schedule_df: pd.DataFrame,
+    node_list: list[str],
+) -> dict[str, object]:
+    """Compute deterministic movement and coverage metrics for a schedule.
+
+    Movement is counted in hops (number of transitions where the node changes)
+    per unit; coverage counts unique nodes visited.
+
+    Args:
+        schedule_df: DataFrame with columns [time_step, unit_id, node_id].
+        node_list: All node IDs present in the graph (defines total nodes).
+
+    Returns:
+        Dict containing:
+          - movement_total_hops: int
+          - movement_by_unit_hops: list[int]
+          - coverage_total_ratio: float (unique nodes / total nodes)
+          - coverage_total_count: int (unique nodes)
+          - coverage_total_nodes: int (len(node_list))
+          - coverage_by_unit_ratio: list[float]
+          - coverage_by_unit_count: list[int]
+    """
+    if schedule_df.empty:
+        total_nodes = len(node_list)
+        return {
+            "movement_total_hops": 0,
+            "movement_by_unit_hops": [],
+            "coverage_total_ratio": 0.0 if total_nodes > 0 else 0.0,
+            "coverage_total_count": 0,
+            "coverage_total_nodes": total_nodes,
+            "coverage_by_unit_ratio": [],
+            "coverage_by_unit_count": [],
+        }
+
+    df = schedule_df[["time_step", "unit_id", "node_id"]].copy()
+    df = df.sort_values(["unit_id", "time_step"]).reset_index(drop=True)
+
+    # Per-unit hops: count transitions where node changes between consecutive timesteps
+    movement_by_unit: list[int] = []
+    coverage_by_unit_counts: list[int] = []
+    total_nodes = len(node_list)
+
+    for unit_id, sub in df.groupby("unit_id"):
+        nodes = sub["node_id"].astype(str).tolist()
+        hops = 0
+        if len(nodes) >= 2:
+            prev = nodes[0]
+            for curr in nodes[1:]:
+                if curr != prev:
+                    hops += 1
+                prev = curr
+        movement_by_unit.append(int(hops))
+        coverage_by_unit_counts.append(int(len(set(nodes))))
+
+    movement_total = int(sum(movement_by_unit))
+    # Total coverage across all units
+    coverage_total_nodes_set = set(df["node_id"].astype(str).tolist())
+    coverage_total_count = int(len(coverage_total_nodes_set))
+    coverage_total_ratio = float(coverage_total_count / total_nodes) if total_nodes > 0 else 0.0
+
+    coverage_by_unit_ratio = [
+        (c / total_nodes) if total_nodes > 0 else 0.0 for c in coverage_by_unit_counts
+    ]
+
+    return {
+        "movement_total_hops": movement_total,
+        "movement_by_unit_hops": [int(x) for x in movement_by_unit],
+        "coverage_total_ratio": float(coverage_total_ratio),
+        "coverage_total_count": int(coverage_total_count),
+        "coverage_total_nodes": int(total_nodes),
+        "coverage_by_unit_ratio": [float(x) for x in coverage_by_unit_ratio],
+        "coverage_by_unit_count": [int(x) for x in coverage_by_unit_counts],
+    }
+
+
 def evaluate_schedule(
     schedule_df: pd.DataFrame,
     node_list: list[str],
